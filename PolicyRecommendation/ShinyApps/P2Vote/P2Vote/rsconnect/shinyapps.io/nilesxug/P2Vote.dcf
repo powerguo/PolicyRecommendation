@@ -1,0 +1,12 @@
+name: P2Vote
+title: P2Vote
+username:
+account: nilesxug
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 1840332
+bundleId: 4588120
+url: https://nilesxug.shinyapps.io/P2Vote/
+when: 1620781478.39543
+asMultiple: FALSE
+asStatic: FALSE

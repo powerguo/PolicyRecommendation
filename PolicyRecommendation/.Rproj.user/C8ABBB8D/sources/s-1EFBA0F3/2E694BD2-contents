@@ -1,0 +1,24 @@
+---
+title: "DataOrganization"
+author: "Niles Guo"
+date: "December 30, 2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+library(readxl)
+library(perm)
+library(mlogit)
+library(fmsb)
+library(gridExtra)
+library(ggpubr)
+
+```
+
+
+

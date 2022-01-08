@@ -1,0 +1,22 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1641662480649.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "2365235779",
+    "id" : "FC27247A",
+    "lastKnownWriteTime" : 1641663105,
+    "last_content_update" : 1641663105295,
+    "path" : "~/CADS/PolicyRecommendation/PolicyRecommendation/Code/DataCollection.R",
+    "project_path" : "Code/DataCollection.R",
+    "properties" : {
+        "cursorPosition" : "730,37",
+        "scrollLine" : "717"
+    },
+    "relative_order" : 6,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

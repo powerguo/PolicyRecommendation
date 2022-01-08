@@ -1,0 +1,13 @@
+name: DNC2020Utility
+title: DNC2020Utility
+username:
+account: nilesxug
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 1006727
+bundleId: 3202153
+url: https://nilesxug.shinyapps.io/DNC2020Utility/
+when: 1590699062.9703
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: attributeTable.pdf|bootstrap.css|bootstrap.min.css|Correspondence_for_STUDY2019_00000401.pdf|download.png

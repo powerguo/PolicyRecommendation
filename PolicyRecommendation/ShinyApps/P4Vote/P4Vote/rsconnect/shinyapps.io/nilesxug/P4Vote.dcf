@@ -1,0 +1,12 @@
+name: P4Vote
+title: P4Vote
+username:
+account: nilesxug
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 1840307
+bundleId: 4588195
+url: https://nilesxug.shinyapps.io/P4Vote/
+when: 1620783534.92225
+asMultiple: FALSE
+asStatic: FALSE
