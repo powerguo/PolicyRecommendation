@@ -582,6 +582,9 @@ mean_RFS2_34 <- mean(RFS2_3$Value) - mean(RFS2_4$Value)
 
 cohen_RFS2_34 <- mean_RFS2_34/(sqrt((sd(RFS2_1$Value)^2 + sd(RFS2_2$Value)^2)/2))
 
+#All Values are tabulated into table 1
+
+
 #Figure 1 of Manuscript
 
 ggplot(data = coef.all_gather, aes(x = as.factor(assigned), y = Value))+
