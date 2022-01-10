@@ -1,0 +1,9 @@
+{
+    "path" : "~/CADS/PolicyRecommendation/PolicyRecommendation/ShinyApps/Suggestion",
+    "sortOrder" : [
+        {
+            "ascending" : true,
+            "columnIndex" : 2
+        }
+    ]
+}

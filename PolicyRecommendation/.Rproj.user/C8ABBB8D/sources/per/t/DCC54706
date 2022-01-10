@@ -1,0 +1,22 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1641830729629.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "3044739439",
+    "id" : "DCC54706",
+    "lastKnownWriteTime" : 1641830748,
+    "last_content_update" : 1641830748403,
+    "path" : "~/CADS/PolicyRecommendation/PolicyRecommendation/ShinyApps/WeightedSum/Suggestion/app.R",
+    "project_path" : "ShinyApps/WeightedSum/Suggestion/app.R",
+    "properties" : {
+        "cursorPosition" : "169,114",
+        "scrollLine" : "150"
+    },
+    "relative_order" : 13,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

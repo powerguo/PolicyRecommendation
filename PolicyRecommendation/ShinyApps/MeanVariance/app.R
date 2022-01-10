@@ -162,10 +162,13 @@ server <- function(input, output) {
   
   options(
     gargle_oauth_cache = ".secrets",
+    
+    #IMPORTANT: UPDATE EMAIL TO YOUR GOOGLE ACCOUNT TO ENSURE YOU CAN ACCESS GOOGLE DRIVE USING YOUR OWN CREDENTIALS
     gargle_oauth_email = "nilesguo@gmail.com"
   )
   
   drive_auth()
+  #IMPORTANT: UPDATE EMAIL TO YOUR GOOGLE ACCOUNT TO ENSURE YOU CAN ACCESS GOOGLE DRIVE USING YOUR OWN CREDENTIALS
   drive_auth(email = "nilesguo@gmail.com")
   sheets_auth(token = drive_token())
   
