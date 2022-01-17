@@ -1,0 +1,29 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1642369834468.000,
+    "dirty" : false,
+    "encoding" : "",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "A25EDCA1",
+    "lastKnownWriteTime" : 34058897390633068,
+    "last_content_update" : 1642369834468,
+    "path" : null,
+    "project_path" : null,
+    "properties" : {
+        "cacheKey" : "4638C583",
+        "caption" : "T2_consensus_kvalues",
+        "contentUrl" : "grid_resource/gridviewer.html?env=&obj=T2_consensus_kvalues&cache_key=4638C583",
+        "displayedObservations" : 19,
+        "environment" : "",
+        "object" : "T2_consensus_kvalues",
+        "preview" : 0,
+        "totalObservations" : 19,
+        "variables" : 3
+    },
+    "relative_order" : 16,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_dataframe"
+}

@@ -1,0 +1,510 @@
+library(dplyr)
+library(tidyr)
+library(googleAuthR)
+library(googledrive)
+library(googlesheets4)
+library(shinyjs)
+library(lubridate)
+library(rstanarm)
+library(mlogit)
+library(Hmisc)
+library(survival)
+library(DoE.base)
+library(DoE.wrapper)
+library(Metrics)
+library(mgcv)
+library(support.CEs)
+library(mlmRev)
+library(lme4)
+library(rlist)
+library(Matrix)
+library(matrixStats)
+library(pROC)
+library(purrr)
+library(magrittr)
+library(gargle)
+library(httr)
+library(readxl)
+
+a <- drive_ls("Completed Study")
+
+file.names <- list.files("Results/Completed Study/Included")
+
+leftind <- c()
+rightind <- c()
+responses.ind <- c()
+
+for (i in 1:length(file.names)){
+  
+  leftind[[i]] <- read_excel(paste0("Results/Completed Study/Included/", file.names[i]), sheet = 2)
+  rightind[[i]] <- read_excel(paste0("Results/Completed Study/Included/", file.names[i]), sheet = 3)
+  responses.ind[[i]] <- read_excel(paste0("Results/Completed Study/Included/", file.names[i]), sheet = 4, col_names = FALSE)
+  
+}
+
+
+
+get.utility <- function(leftalt, rightalt, responses, n){
+  
+  result.df <- data.frame(matrix(nrow = length(n), ncol = 8))
+  names.result <- c("intercept", "nuc.power1", "nuc.power2", "CO2Price", "ban.fuel.explore1", "ban.fuel.explore2", "RFS1", "RFS2")
+  
+  names(result.df) <- names.result
+
+  for(i in 1:length(wave.three)){
+    
+    leftalt1 <- leftind[[i]]%>%
+      mutate(nuc.power = ifelse(nuc.power == "Keep current nuclear power plants but do not build any new plants.", 0, ifelse(
+        nuc.power == "Keep current nuclear power plants and provide money to increase nuclear power by 14% over the next eight years.", 1, 2)
+      ))%>%
+      mutate(ban.fuel.explore = ifelse(ban.fuel.explore == "Unregulated access to federal lands and waters for fossil fuel exploration.", 0, ifelse(
+        ban.fuel.explore == "Tighter fracking regulation on public lands that increases storage safety standards and transparency of what chemicals are used.", 1, 2
+      )))%>%
+      mutate(RFS = ifelse(RFS == "Starting from 2021, reach 100% clean energy by 2100 with a yearly increase of 1.3% of clean energy in the grid.", 0, ifelse(
+        RFS == "Starting from 2021, reach 100% clean energy by 2050 with a yearly increase of 3.5% of clean energy in the grid.", 1, 2)))
+    
+    leftalt.1 <- leftalt1%>%
+      mutate(nuc.power_0 = nuc.power)%>%
+      mutate(CO2Price_0 = CO2Price) %>%
+      mutate(ban.fuel.explore_0 = ban.fuel.explore)%>%
+      mutate(RFS_0 = RFS)
+    
+    left1 <- leftalt.1[5:8]
+    
+    left1 <- left1%>%
+      mutate(nuc.power_0 = as.factor(nuc.power_0))%>%
+      mutate(ban.fuel.explore_0 = as.factor(ban.fuel.explore_0))%>%
+      mutate(RFS_0 = as.factor(RFS_0))
+    
+    
+    rightalt1 <- rightind[[i]]%>%
+      mutate(nuc.power = ifelse(nuc.power == "Keep current nuclear power plants but do not build any new plants.", 0, ifelse(
+        nuc.power == "Keep current nuclear power plants and provide money to increase nuclear power by 14% over the next eight years.", 1, 2)
+      ))%>%
+      mutate(ban.fuel.explore = ifelse(ban.fuel.explore == "Unregulated access to federal lands and waters for fossil fuel exploration.", 0, ifelse(
+        ban.fuel.explore == "Tighter fracking regulation on public lands that increases storage safety standards and transparency of what chemicals are used.", 1, 2
+      )))%>%
+      mutate(RFS = ifelse(RFS == "Starting from 2021, reach 100% clean energy by 2100 with a yearly increase of 1.3% of clean energy in the grid.", 0, ifelse(
+        RFS == "Starting from 2021, reach 100% clean energy by 2050 with a yearly increase of 3.5% of clean energy in the grid.", 1, 2)))
+    
+    rightalt.1 <- rightalt1%>%
+      mutate(nuc.power_1 = nuc.power)%>%
+      mutate(CO2Price_1 = CO2Price)%>%
+      mutate(ban.fuel.explore_1 = ban.fuel.explore)%>%
+      mutate(RFS_1 = RFS)
+    
+    right1 <- rightalt.1[5:8]
+    
+    right1 <- right1%>%
+      mutate(nuc.power_1 = as.factor(nuc.power_1))%>%
+      mutate(ban.fuel.explore_1 = as.factor(ban.fuel.explore_1))%>%
+      mutate(RFS_1 = as.factor(RFS_1))
+    
+    answers1 <- responses.ind[[i]]
+    
+    names(answers1) <- c("Choice")
+    
+    data.1 <- cbind(answers1, left1, right1)
+    
+    id.1 <- rep(1,length(answers1))
+    
+    dataset.1 <- cbind(id.1, data.1)
+    
+    dataset.ready1 <- mlogit.data(dataset.1, shape = "wide", choice = "Choice", varying = c(3:10), sep = "_")
+    
+    ut1 <- glm(Choice ~ nuc.power + (CO2Price) + ban.fuel.explore + RFS, data = dataset.ready1, family = binomial(link = "logit"))
+    
+    result.df[i,] <- coef(ut1)
+    
+  }
+ 
+  result.df$id <- wave.three
+  
+  return(result.df)
+  
+}
+
+utility.matrix <- get.utility(leftind, rightind, responses.ind)
+
+utility.matrix <- coefs.all
+
+clustering.algor <- function(k, iterations, utility.matrix){
+  
+  col.names <- c("Intercept", "Nuc1", "Nuc2", "CO2Price", "BanFuel1", "BanFuel2", "RFS1", "RFS2", "Id")  
+  names(utility.matrix) <- col.names
+  
+  kclust <- utility.matrix[,1:8]%>%
+    kmeans(k)
+  mean.dist <- c()
+  
+  kdist <- function(a1, b1, a2, b2, a3, b3, a4, b4, a5, b5, a6, b6, a7, b7, a8, b8){
+    
+    a <- sqrt((a1-b1)^2 + (a2-b2)^2 +(a3-b3)^2 + (a4-b4)^2+ (a5-b5)^2 + (a6-b6)^2 + (a7-b7)^2 + (a8-b8)^2)
+    
+    return(a)
+    
+  }
+  
+  
+  centers <- kclust$centers
+  
+  utility.matrix%<>%
+    mutate(D1 = kdist(Intercept, centers[1,1], Nuc1, centers[1,2], Nuc2, centers[1,3], CO2Price, centers[1,4], BanFuel1, centers[1,5], BanFuel2, centers[1,6], RFS1, centers[1,7], RFS2, centers[1,8]))
+  
+  utility.matrix%<>%
+    mutate(D2 = kdist(Intercept, centers[2,1], Nuc1, centers[2,2], Nuc2, centers[2,3], CO2Price, centers[2,4], BanFuel1, centers[2,5], BanFuel2, centers[2,6], RFS1, centers[2,7], RFS2, centers[2,8]))
+  
+  utility.matrix%<>%
+    mutate(D3 = kdist(Intercept, centers[3,1], Nuc1, centers[3,2], Nuc2, centers[3,3], CO2Price, centers[3,4], BanFuel1, centers[3,5], BanFuel2, centers[3,6], RFS1, centers[3,7], RFS2, centers[3,8]))
+  
+  utility.matrix%<>%
+    mutate(D4 = kdist(Intercept, centers[4,1], Nuc1, centers[4,2], Nuc2, centers[4,3], CO2Price, centers[4,4], BanFuel1, centers[4,5], BanFuel2, centers[4,6], RFS1, centers[4,7], RFS2, centers[4,8]))
+  
+  
+  assigned <- rep(as.numeric(0), times = (216))
+  
+  utility.matrix <- cbind(utility.matrix, assigned)
+  
+  next.iteration <- c()
+  
+  for(i in 1:216){
+    
+    for (j in 1:k){
+      
+      colnums <- 9+j
+      
+      current.row.num <- which.min(utility.matrix[,colnums])
+      
+      move.row <- utility.matrix[current.row.num,]
+      move.row[1, 14] <- j
+      
+      next.iteration <- rbind(next.iteration, move.row)
+      utility.matrix <- utility.matrix[-current.row.num,]
+      
+    }
+  }
+  
+  next.iteration <- next.iteration%>%
+    dplyr::filter(!is.na(Id))
+  
+  new.center <- next.iteration%>%
+    filter(assigned == 1)
+  new.center <- new.center[1:8]%>%  
+    kmeans(1)%$%centers
+  
+  new.center%<>%rbind(next.iteration%>%
+                        filter(assigned == 2)%>%
+                        dplyr::select(Intercept, Nuc1, Nuc2, CO2Price, BanFuel1, BanFuel2, RFS1, RFS2) %>%
+                        kmeans(1) %$% centers)
+  
+  new.center%<>%rbind(next.iteration%>%
+                        filter(assigned == 3)%>%
+                        dplyr::select(Intercept, Nuc1, Nuc2, CO2Price, BanFuel1, BanFuel2, RFS1, RFS2) %>%
+                        kmeans(1) %$% centers)
+  
+  new.center%<>%rbind(next.iteration%>%
+                        filter(assigned == 4)%>%
+                        dplyr::select(Intercept, Nuc1, Nuc2, CO2Price, BanFuel1, BanFuel2, RFS1, RFS2) %>%
+                        kmeans(1) %$% centers)
+  
+  distance.centers1 <- kdist(centers[1,1], new.center[1,1], centers[1,2], new.center[1,2], centers[1,3], new.center[1,3],
+                             centers[1,4], new.center[1,4], centers[1,5], new.center[1,5], centers[1,6], new.center[1,6],
+                             centers[1,7], new.center[1,7], centers[1,8], new.center[1,8])
+  
+  distance.centers2 <- kdist(centers[2,1], new.center[2,1], centers[2,2], new.center[2,2], centers[2,3], new.center[2,3],
+                             centers[2,4], new.center[2,4], centers[2,5], new.center[2,5], centers[2,6], new.center[2,6],
+                             centers[2,7], new.center[2,7], centers[2,8], new.center[2,8])
+  
+  distance.centers3 <- kdist(centers[3,1], new.center[3,1], centers[3,2], new.center[3,2], centers[3,3], new.center[3,3],
+                             centers[3,4], new.center[3,4], centers[3,5], new.center[3,5], centers[3,6], new.center[3,6],
+                             centers[3,7], new.center[3,7], centers[3,8], new.center[3,8])
+  
+  distance.centers4 <- kdist(centers[4,1], new.center[4,1], centers[4,2], new.center[4,2], centers[4,3], new.center[4,3],
+                             centers[4,4], new.center[4,4], centers[4,5], new.center[4,5], centers[4,6], new.center[4,6],
+                             centers[4,7], new.center[4,7], centers[4,8], new.center[4,8])
+  
+  
+  
+  
+  for (h in 1:iterations){
+    
+    mean.dist[h] <- sum(distance.centers1, distance.centers2, distance.centers3, distance.centers4)/4
+    
+
+  
+    if(distance.centers1 <3 & distance.centers2 <3 & distance.centers3 <3& distance.centers4<3){
+      
+      print("Centers Converged")
+      
+      utility.matrix <- next.iteration
+      break
+      
+    }
+    
+    else{
+      
+     print("Center needs to converge")
+      
+  
+      utility.matrix <- next.iteration
+      col.names <- c("Intercept", "Nuc1", "Nuc2", "CO2Price", "BanFuel1", "BanFuel2", "RFS1", "RFS2", "Id", "D1", "D2", "D3", "D4", "assigned")  
+      names(utility.matrix) <- col.names
+      
+      utility.matrix%<>%
+        mutate(D1 = kdist(Intercept, new.center[1,1], Nuc1, new.center[1,2], Nuc2, new.center[1,3], CO2Price, new.center[1,4], BanFuel1, new.center[1,5], BanFuel2, new.center[1,6], RFS1, new.center[1,7], RFS2, new.center[1,8]))
+      
+      utility.matrix%<>%
+        mutate(D2 = kdist(Intercept, new.center[2,1], Nuc1, new.center[2,2], Nuc2, new.center[2,3], CO2Price, new.center[2,4], BanFuel1, new.center[2,5], BanFuel2, new.center[2,6], RFS1, new.center[2,7], RFS2, new.center[2,8]))
+      
+      utility.matrix%<>%
+        mutate(D3 = kdist(Intercept, new.center[3,1], Nuc1, new.center[3,2], Nuc2, new.center[3,3], CO2Price, new.center[3,4], BanFuel1, new.center[3,5], BanFuel2, new.center[3,6], RFS1, new.center[3,7], RFS2, new.center[3,8]))
+      
+      utility.matrix%<>%
+        mutate(D4 = kdist(Intercept, new.center[4,1], Nuc1, new.center[4,2], Nuc2, new.center[4,3], CO2Price, new.center[4,4], BanFuel1, new.center[4,5], BanFuel2, new.center[4,6], RFS1, new.center[4,7], RFS2, new.center[4,8]))
+      
+    
+      utility.matrix$assigned <- 0
+      
+      next.iteration <- c()
+      
+      for(l in 1:216){
+        
+        for (j in 1:k){
+          
+          colnums <- 9+j
+          
+          current.row.num <- which.min(utility.matrix[,colnums])
+          
+          move.row <- utility.matrix[current.row.num,]
+          move.row[1, 14] <- j
+          
+          next.iteration <- rbind(next.iteration, move.row)
+          utility.matrix <- utility.matrix[-current.row.num,]
+          
+        }
+      }
+      
+      next.iteration <- next.iteration%>%
+        dplyr::filter(!is.na(Id))
+      
+      new.center <- next.iteration%>%
+        filter(assigned == 1)
+      new.center <- new.center[1:8]%>%  
+        kmeans(1)%$%centers
+      
+      new.center%<>%rbind(next.iteration%>%
+                            filter(assigned == 2)%>%
+                            dplyr::select(Intercept, Nuc1, Nuc2, CO2Price, BanFuel1, BanFuel2, RFS1, RFS2) %>%
+                            kmeans(1) %$% centers)
+      
+      new.center%<>%rbind(next.iteration%>%
+                            filter(assigned == 3)%>%
+                            dplyr::select(Intercept, Nuc1, Nuc2, CO2Price, BanFuel1, BanFuel2, RFS1, RFS2) %>%
+                            kmeans(1) %$% centers)
+      
+      new.center%<>%rbind(next.iteration%>%
+                            filter(assigned == 4)%>%
+                            dplyr::select(Intercept, Nuc1, Nuc2, CO2Price, BanFuel1, BanFuel2, RFS1, RFS2) %>%
+                            kmeans(1) %$% centers)
+      
+      distance.centers1 <- kdist(centers[1,1], new.center[1,1], centers[1,2], new.center[1,2], centers[1,3], new.center[1,3],
+                                 centers[1,4], new.center[1,4], centers[1,5], new.center[1,5], centers[1,6], new.center[1,6],
+                                 centers[1,7], new.center[1,7], centers[1,8], new.center[1,8])
+      
+      distance.centers2 <- kdist(centers[2,1], new.center[2,1], centers[2,2], new.center[2,2], centers[2,3], new.center[2,3],
+                                 centers[2,4], new.center[2,4], centers[2,5], new.center[2,5], centers[2,6], new.center[2,6],
+                                 centers[2,7], new.center[2,7], centers[2,8], new.center[2,8])
+      
+      distance.centers3 <- kdist(centers[3,1], new.center[3,1], centers[3,2], new.center[3,2], centers[3,3], new.center[3,3],
+                                 centers[3,4], new.center[3,4], centers[3,5], new.center[3,5], centers[3,6], new.center[3,6],
+                                 centers[3,7], new.center[3,7], centers[3,8], new.center[3,8])
+      
+      distance.centers4 <- kdist(centers[4,1], new.center[4,1], centers[4,2], new.center[4,2], centers[4,3], new.center[4,3],
+                                 centers[4,4], new.center[4,4], centers[4,5], new.center[4,5], centers[4,6], new.center[4,6],
+                                 centers[4,7], new.center[4,7], centers[4,8], new.center[4,8])
+      
+      print(distance.centers1)
+      
+    }
+    
+ 
+      
+  }
+  
+  output.list <- list(utility.matrix, distance.centers1, distance.centers2, distance.centers3, distance.centers4, kclust, mean.dist, next.iteration, new.center)
+ 
+  return(output.list)
+
+  
+}
+
+
+sorted.groups <- clustering.algor(4, 10, utility.matrix)
+
+new.wave <-  list.files("Results/Completed Study/WaveTwo/WaveTwoComplete")
+
+
+leftind <- c()
+rightind <- c()
+responses.ind <- c()
+
+for (i in 1:length(new.wave)){
+  
+  leftind[[i]] <- read_excel(paste0("Results/Completed Study/WaveTwo/WaveTwoComplete/", new.wave[i]), sheet = 2)
+  rightind[[i]] <- read_excel(paste0("Results/Completed Study/WaveTwo/WaveTwoComplete/", new.wave[i]), sheet = 3)
+  responses.ind[[i]] <- read_excel(paste0("Results/Completed Study/WaveTwo/WaveTwoComplete/", new.wave[i]), sheet = 4, col_names = FALSE)
+  
+}
+
+new.utility.matrix <- get.utility(leftind, rightind, responses.ind)
+
+col.names <- c("Intercept", "Nuc1", "Nuc2", "CO2Price", "BanFuel1", "BanFuel2", "RFS1", "RFS2", "Id")  
+names(new.utility.matrix) <- col.names
+
+new.utility.matrix%<>%
+  mutate(D1 = kdist(Intercept, sorted.groups[[9]][1,1], Nuc1, sorted.groups[[9]][1,2], Nuc2, sorted.groups[[9]][1,3], CO2Price, sorted.groups[[9]][1,4], BanFuel1, sorted.groups[[9]][1,5], BanFuel2, sorted.groups[[9]][1,6], RFS1, sorted.groups[[9]][1,7], RFS2, sorted.groups[[9]][1,8]))
+
+new.utility.matrix%<>%
+  mutate(D2 = kdist(Intercept, sorted.groups[[9]][2,1], Nuc1, sorted.groups[[9]][2,2], Nuc2, sorted.groups[[9]][2,3], CO2Price, sorted.groups[[9]][2,4], BanFuel1, sorted.groups[[9]][2,5], BanFuel2, sorted.groups[[9]][2,6], RFS1, sorted.groups[[9]][2,7], RFS2, sorted.groups[[9]][2,8]))
+
+new.utility.matrix%<>%
+  mutate(D3 = kdist(Intercept, sorted.groups[[9]][3,1], Nuc1, sorted.groups[[9]][3,2], Nuc2, sorted.groups[[9]][3,3], CO2Price, sorted.groups[[9]][3,4], BanFuel1, sorted.groups[[9]][3,5], BanFuel2, sorted.groups[[9]][3,6], RFS1, sorted.groups[[9]][3,7], RFS2, sorted.groups[[9]][3,8]))
+
+new.utility.matrix%<>%
+  mutate(D4 = kdist(Intercept, sorted.groups[[9]][4,1], Nuc1, sorted.groups[[9]][4,2], Nuc2, sorted.groups[[9]][4,3], CO2Price, sorted.groups[[9]][4,4], BanFuel1, sorted.groups[[9]][4,5], BanFuel2, sorted.groups[[9]][4,6], RFS1, sorted.groups[[9]][4,7], RFS2, sorted.groups[[9]][4,8]))
+
+
+assigned <- rep(as.numeric(0), times = (length(new.wave)))
+
+new.utility.matrix <- cbind(new.utility.matrix, assigned)
+
+next.iteration <- c()
+
+for(i in 1:length(new.wave)){
+  
+  for (j in 1:k){
+    
+    colnums <- 9+j
+    
+    current.row.num <- which.min(new.utility.matrix[,colnums])
+    
+    move.row <- new.utility.matrix[current.row.num,]
+    move.row[1, 14] <- j
+    
+    next.iteration <- rbind(next.iteration, move.row)
+    new.utility.matrix <- new.utility.matrix[-current.row.num,]
+    
+  }
+}
+
+next.iteration <- next.iteration%>%
+  dplyr::filter(!is.na(Id))
+
+new.center <- next.iteration%>%
+  filter(assigned == 1)
+new.center <- new.center[1:8]%>%  
+  kmeans(1)%$%centers
+
+new.center%<>%rbind(next.iteration%>%
+                      filter(assigned == 2)%>%
+                      dplyr::select(Intercept, Nuc1, Nuc2, CO2Price, BanFuel1, BanFuel2, RFS1, RFS2) %>%
+                      kmeans(1) %$% centers)
+
+new.center%<>%rbind(next.iteration%>%
+                      filter(assigned == 3)%>%
+                      dplyr::select(Intercept, Nuc1, Nuc2, CO2Price, BanFuel1, BanFuel2, RFS1, RFS2) %>%
+                      kmeans(1) %$% centers)
+
+new.center%<>%rbind(next.iteration%>%
+                      filter(assigned == 4)%>%
+                      dplyr::select(Intercept, Nuc1, Nuc2, CO2Price, BanFuel1, BanFuel2, RFS1, RFS2) %>%
+                      kmeans(1) %$% centers)
+
+
+write.csv(next.iteration, file= "newwave.csv"
+          )
+
+wave.three <- list.files("Results/Completed Study/WaveThreeComplete")
+
+
+leftind <- c()
+rightind <- c()
+responses.ind <- c()
+
+for (i in 1:length(wave.three)){
+  
+  leftind[[i]] <- read_excel(paste0("Results/Completed Study/WaveThreeComplete/", wave.three[i]), sheet = 2)
+  rightind[[i]] <- read_excel(paste0("Results/Completed Study/WaveThreeComplete/", wave.three[i]), sheet = 3)
+  responses.ind[[i]] <- read_excel(paste0("Results/Completed Study/WaveThreeComplete/", wave.three[i]), sheet = 4, col_names = FALSE)
+  
+}
+
+new.utility.matrix.three <- get.utility(leftind, rightind, responses.ind)
+
+col.names <- c("Intercept", "Nuc1", "Nuc2", "CO2Price", "BanFuel1", "BanFuel2", "RFS1", "RFS2", "Id")  
+names(new.utility.matrix.three) <- col.names
+
+new.utility.matrix.three%<>%
+  mutate(D1 = kdist(Intercept, sorted.groups[[9]][1,1], Nuc1, sorted.groups[[9]][1,2], Nuc2, sorted.groups[[9]][1,3], CO2Price, sorted.groups[[9]][1,4], BanFuel1, sorted.groups[[9]][1,5], BanFuel2, sorted.groups[[9]][1,6], RFS1, sorted.groups[[9]][1,7], RFS2, sorted.groups[[9]][1,8]))
+
+new.utility.matrix.three%<>%
+  mutate(D2 = kdist(Intercept, sorted.groups[[9]][2,1], Nuc1, sorted.groups[[9]][2,2], Nuc2, sorted.groups[[9]][2,3], CO2Price, sorted.groups[[9]][2,4], BanFuel1, sorted.groups[[9]][2,5], BanFuel2, sorted.groups[[9]][2,6], RFS1, sorted.groups[[9]][2,7], RFS2, sorted.groups[[9]][2,8]))
+
+new.utility.matrix.three%<>%
+  mutate(D3 = kdist(Intercept, sorted.groups[[9]][3,1], Nuc1, sorted.groups[[9]][3,2], Nuc2, sorted.groups[[9]][3,3], CO2Price, sorted.groups[[9]][3,4], BanFuel1, sorted.groups[[9]][3,5], BanFuel2, sorted.groups[[9]][3,6], RFS1, sorted.groups[[9]][3,7], RFS2, sorted.groups[[9]][3,8]))
+
+new.utility.matrix.three%<>%
+  mutate(D4 = kdist(Intercept, sorted.groups[[9]][4,1], Nuc1, sorted.groups[[9]][4,2], Nuc2, sorted.groups[[9]][4,3], CO2Price, sorted.groups[[9]][4,4], BanFuel1, sorted.groups[[9]][4,5], BanFuel2, sorted.groups[[9]][4,6], RFS1, sorted.groups[[9]][4,7], RFS2, sorted.groups[[9]][4,8]))
+
+
+assigned <- rep(as.numeric(0), times = (length(wave.three)))
+
+new.utility.matrix.three <- cbind(new.utility.matrix.three, assigned)
+
+next.iteration <- c()
+
+for(i in 1:length(wave.three)){
+  
+  for (j in 1:k){
+    
+    colnums <- 9+j
+    
+    current.row.num <- which.min(new.utility.matrix.three[,colnums])
+    
+    move.row <- new.utility.matrix.three[current.row.num,]
+    move.row[1, 14] <- j
+    
+    next.iteration <- rbind(next.iteration, move.row)
+    new.utility.matrix.three <- new.utility.matrix.three[-current.row.num,]
+    
+  }
+}
+
+next.iteration <- next.iteration%>%
+  dplyr::filter(!is.na(Id))
+
+new.center <- next.iteration%>%
+  filter(assigned == 1)
+new.center <- new.center[1:8]%>%  
+  kmeans(1)%$%centers
+
+new.center%<>%rbind(next.iteration%>%
+                      filter(assigned == 2)%>%
+                      dplyr::select(Intercept, Nuc1, Nuc2, CO2Price, BanFuel1, BanFuel2, RFS1, RFS2) %>%
+                      kmeans(1) %$% centers)
+
+new.center%<>%rbind(next.iteration%>%
+                      filter(assigned == 3)%>%
+                      dplyr::select(Intercept, Nuc1, Nuc2, CO2Price, BanFuel1, BanFuel2, RFS1, RFS2) %>%
+                      kmeans(1) %$% centers)
+
+new.center%<>%rbind(next.iteration%>%
+                      filter(assigned == 4)%>%
+                      dplyr::select(Intercept, Nuc1, Nuc2, CO2Price, BanFuel1, BanFuel2, RFS1, RFS2) %>%
+                      kmeans(1) %$% centers)
+
+
+write.csv(next.iteration, file= "newwavethree.csv"
+)
+
+write.csv(file = "./cluster_assignment_join.csv", coverge.cluster[[8]])

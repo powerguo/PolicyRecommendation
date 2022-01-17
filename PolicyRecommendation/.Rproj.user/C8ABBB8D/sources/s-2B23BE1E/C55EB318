@@ -5,7 +5,7 @@
     "dirty" : false,
     "encoding" : "UTF-8",
     "folds" : "",
-    "hash" : "1771105510",
+    "hash" : "0",
     "id" : "C55EB318",
     "lastKnownWriteTime" : 1641830769,
     "last_content_update" : 1641830769932,
@@ -13,7 +13,7 @@
     "project_path" : "ShinyApps/Survey/app.R",
     "properties" : {
         "cursorPosition" : "310,114",
-        "scrollLine" : "300"
+        "scrollLine" : "0"
     },
     "relative_order" : 14,
     "source_on_save" : false,

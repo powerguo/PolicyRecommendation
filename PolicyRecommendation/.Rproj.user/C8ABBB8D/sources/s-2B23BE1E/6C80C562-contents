@@ -1,0 +1,1545 @@
+alt1.test <- fac.design(factor.names = list(nuc.power =c("Provide financial support to build nuclear power plants that have been planned and proposed while maintaining the existing nuclear power plants. This will add ~13 GW of nuclear power to the existing 92 GW of nuclear capacity", 
+                                                         "Provide support and maintain the existing nuclear power capacity of 92 GW (~20%) in the electricity grid. No support for any new or proposed nuclear power plants in the country.", 
+                                                         "Phase out unprofitable and scheduled to close nuclear power in the country that will reduce the generation capacity by 13.7-26.8 GW with no planned replacement in the next eight years."),
+                                            CO2Price = c("0", "30", "60", "90", "120", "150"),
+                                            ban.fuel.explore = c("Reinstate 2015 Bureau of Land Management executive order for hydraulic fracturing on public lands that increases storage safety standards and transparency of the chemicals used.", 
+                                                                 "Fully ban fossil fuel exploration on public lands", 
+                                                                 "No change to status quo"),
+                                            RFS = c("Starting from 2021, reach 100% clean energy by 2035 with a yearly increase of 7.5% of clean energy in the grid", 
+                                                    "Starting from 2021, reach 100% clean energy by 2050 with a yearly increase of 3.5% of clean energy in the grid", 
+                                                    "Starting from 2021, reach 100% clean energy by 2100 with a yearly increase of 1.3% of clean energy in the grid")))
+
+
+alt.left.num.test <- alt1.test%>%
+  mutate(nuc.power = ifelse(nuc.power == "Provide financial support to build nuclear power plants that have been planned and proposed while maintaining the existing nuclear power plants. This will add ~13 GW of nuclear power to the existing 92 GW of nuclear capacity", 0, ifelse(
+    nuc.power == "Provide support and maintain the existing nuclear power capacity of 92 GW (~20%) in the electricity grid. No support for any new or proposed nuclear power plants in the country.", 1, 2)
+  ))%>%
+  mutate(CO2Price = ifelse(CO2Price == "0", 0, ifelse(
+    CO2Price == "30", 1, ifelse(
+      CO2Price == "60", 2, ifelse(
+        CO2Price =="90", 3, ifelse(
+          CO2Price == "120", 4, 5
+        )
+      )
+    ) 
+  )))%>%
+  mutate(ban.fuel.explore = ifelse(ban.fuel.explore == "Reinstate 2015 Bureau of Land Management executive order for hydraulic fracturing on public lands that increases storage safety standards and transparency of the chemicals used.", 0, ifelse(
+    ban.fuel.explore == "Fully ban fossil fuel exploration on public lands", 1, 2
+  )))%>%
+  mutate(RFS = ifelse(RFS == "Starting from 2021, reach 100% clean energy by 2035 with a yearly increase of 7.5% of clean energy in the grid", 0, ifelse(
+    RFS == "Starting from 2021, reach 100% clean energy by 2050 with a yearly increase of 3.5% of clean energy in the grid", 1, 2)))
+
+alt.right.num.test <- alt.left.num.test%>%
+  mutate(nuc.power = (nuc.power + 1)%%3)%>%
+  mutate(ban.fuel.explore = (ban.fuel.explore + 1)%%3)%>%
+  mutate(RFS = (RFS + 1)%%3)%>%
+  mutate(CO2Price = (CO2Price + 1)%%6)%>%
+  dplyr::select(nuc.power, CO2Price, ban.fuel.explore, RFS)
+
+alt.left.txt <- alt.left.num.test%>%
+  mutate(CO2Price = ifelse(CO2Price == "0", 0, ifelse(
+    CO2Price == "1", 30, ifelse(
+      CO2Price == "2", 60, ifelse(
+        CO2Price =="3", 90, ifelse(
+          CO2Price =="4", 120, 150
+        )
+      )
+    )
+  )))%>%
+  mutate(nuc.power0 = nuc.power)%>%
+  mutate(CO2Price0 = CO2Price)%>%
+  mutate(ban.fuel.explore0 = ban.fuel.explore)%>%
+  mutate(RFS0 = RFS)%>%
+  dplyr::select(nuc.power0, CO2Price0, ban.fuel.explore0, RFS0)
+
+
+alt.right.txt <- alt.right.num.test%>%
+  mutate(CO2Price = ifelse(CO2Price == "0", 0, ifelse(
+    CO2Price == "1", 30, ifelse(
+      CO2Price == "2", 60, ifelse(
+        CO2Price =="3", 90, ifelse(
+          CO2Price =="4", 120, 150
+        )
+      )
+    )
+  )))%>%
+  mutate(nuc.power1 = nuc.power)%>%
+  mutate(CO2Price1 = CO2Price)%>%
+  mutate(ban.fuel.explore1 = ban.fuel.explore)%>%
+  mutate(RFS1 = RFS)%>%
+  dplyr::select(nuc.power1, CO2Price1, ban.fuel.explore1, RFS1)
+
+total.design.test <- cbind(alt.left.txt, alt.right.txt)
+
+total.design.test.1 <- total.design.test%>%
+  create.col.nuc(1)%>%
+  create.col.nuc(2)%>%
+  create.col.ban(1)%>%
+  create.col.ban(2)%>%
+  create.col.RFS(1)%>%
+  create.col.RFS(2)%>%
+  create.col.nuc1(1)%>%
+  create.col.nuc1(2)%>%
+  create.col.ban1(1)%>%
+  create.col.ban1(2)%>%
+  create.col.RFS1(1)%>%
+  create.col.RFS1(2)%>%
+  dplyr::select(nuc.power01, nuc.power02, CO2Price0, ban.fuel.explore01, ban.fuel.explore02, RFS01, RFS02, nuc.power11, nuc.power12, CO2Price1, ban.fuel.explore11, ban.fuel.explore12, RFS11, RFS12)
+
+ut.matrix <- total.design.test.1%>%
+  dplyr::select(nuc.power01, nuc.power02, CO2Price0, ban.fuel.explore01, ban.fuel.explore02, RFS01, RFS02)%>%
+  mutate(id = rep(1:nrow(total.design.test.1)))
+
+colnames(ut.matrix) <- c("nuc.power1", "nuc.power2", "CO2Price", "ban.fuel.explore1", "ban.fuel.explore2", "RFS1", "RFS2", "id")
+
+utility.matrix <- as.matrix(total.design.test.1[,1:7] - total.design.test.1[,8:14])
+
+colnames(utility.matrix) <- c("nuc.power1", "nuc.power2", "CO2Price", "ban.fuel.explore1", "ban.fuel.explore2", "RFS1", "RFS2")
+
+utility.generation <- function(utility.matrix, b0, b1, b2, b3, b4, b5, b6, b7){
+  
+  b0value <- c()
+  b1value <- c()
+  b2value <- c()
+  b3value <- c()
+  b4value <- c()
+  b5value <- c()
+  b6value <- c()
+  b7value <- c()
+  
+  b0 <- b0
+  b1 <- b1
+  b2 <- b2
+  b3 <- b3/150
+  b4 <- b4
+  b5 <- b5
+  b6 <- b6
+  b7 <- b7
+  
+  total.design.ut <- as.data.frame(utility.matrix)%>%
+    mutate(id = rep(1:nrow(utility.matrix)))%>%
+    mutate(utility = b1*nuc.power1 + b2*nuc.power2 + b3*CO2Price + b4*ban.fuel.explore1 + b5*ban.fuel.explore2 + b6*RFS1 + b7*RFS2)%>%
+    mutate(p = (exp(utility)/(1+exp(utility))))
+  
+  p.values <- total.design.ut$p
+  id.sim <- rep(1, nrow(utility.matrix))
+  Choice <- rbinom(nrow(utility.matrix), 1, total.design.ut$p)
+  
+  total.design.simulate <- cbind(total.design.test, p.values, Choice, id.sim)%>%
+    mutate(Choices = ifelse(Choice == "0", 1, 0))%>%
+    mutate(nuc.power_0 = as.factor(nuc.power0))%>%
+    mutate(nuc.power_1 = as.factor(nuc.power1))%>%
+    mutate(CO2Price_0 = CO2Price0)%>%
+    mutate(CO2Price_1 = CO2Price1)%>%
+    mutate(ban.fuel.explore_0 = as.factor(ban.fuel.explore0))%>%
+    mutate(ban.fuel.explore_1 = as.factor(ban.fuel.explore1))%>%
+    mutate(RFS_0 = as.factor(RFS0))%>%
+    mutate(RFS_1 = as.factor(RFS1))%>%
+    dplyr::select(id.sim, Choices, nuc.power_0, nuc.power_1, CO2Price_0, CO2Price_1, ban.fuel.explore_0, ban.fuel.explore_1, RFS_0, RFS_1)
+  
+  dataset.sim <- mlogit.data(total.design.simulate, shape = "wide", choice = "Choices", varying = c(3:10), sep = "_")
+  
+  sim.utility <- glm(Choices ~ nuc.power + CO2Price + ban.fuel.explore + RFS, data = dataset.sim, family = binomial(link = "logit"))
+  
+  
+  b0t <- sim.utility$coefficients[2]
+  b1t <- (sim.utility$coefficients[3])
+  b2t <- (sim.utility$coefficients[4]/150)
+  b3t <- sim.utility$coefficients[5]
+  b4t <- (sim.utility$coefficients[6])
+  b5t <- sim.utility$coefficients[7] 
+  b6t <- sim.utility$coefficients[8] 
+  b7t <- sim.utility$coefficients[1]
+  
+  
+  mylist <- list(b0t, b1t, b2t, b3t, b4t, b5t, b6t, b7t)
+  return(mylist)
+  
+}
+
+utility.calculation <- function(utility.matrix, b1, b2, b3, b4, b5, b6, b7, b8){
+  
+  total.design.ut <- as.data.frame(utility.matrix)%>%
+    mutate(id = rep(1:nrow(utility.matrix)))%>%
+    mutate(utility = b1*nuc.power1 + b2*nuc.power2 + b3*CO2Price + b4*ban.fuel.explore1 + b5*ban.fuel.explore2 + b6*RFS1 + b7*RFS2 + b8)
+  
+  return(total.design.ut)
+  
+}
+
+constGLM1multiple <- function(X, y, Xtest){
+  # constraints
+  # Ubar: 0.999 < theta1 < 1.001
+  # SD: -1/sqrt(2) < theta2 < 1/sqrt(2)
+  ui <- matrix(c(1, 0, -1, 0, 0, 1, 0, -1), nrow = 4, ncol = 2, byrow = TRUE)
+  ci <- c(0.999, -1.001, -1/sqrt(10), -1/sqrt(10))
+  
+  # constrained log-likelihood
+  CLL <- function(par, X, y){
+    eta <- X %*% par
+    p <- exp(eta)/(1 + exp(eta))
+    ll <- sum(y*log(p) + (1-y)*log(1-p))
+    return(-ll)
+  }
+  
+  # Optimize
+  optims <- constrOptim(c(1, 0), CLL, ui = ui, ci = ci, X = X, y = y, grad = NULL)
+  pars <- optims$par
+  print(pars)
+  
+  # Return predicted probabilities
+  etatest <- Xtest %*% pars
+  output.list = list(pars, exp(etatest)/(1+exp(etatest)), etatest)
+  return(output.list)
+}
+
+group.search.minmaxmultiple <- function(a, t, g, n){
+  
+  alpha.disadvantage <- 1
+  lastcolumn <- 8+n
+  beta.advantage <- 1
+  peopleminus1 <- n-1
+  peopleplus1 <- n+1
+  id.max <- c()
+  pars.list <- c()
+  prob <- c()
+  corscglm <- c()
+  group.welfare <- c()
+  auc.value <- c()
+  for(m in 1:g){
+    
+    
+    new.data <- a
+    optimal.design.matrix <- as.matrix(a[8:lastcolumn])
+    
+    doptimaldesign <- optimal.design.matrix[c(sample(1:162, 15)),]
+    
+    x.test <- c()
+    p.prob <- c()
+    y.people <- c()
+    y.temp <- c()
+    p.people <- c()
+    
+    for (i in 1:n){
+      
+      x.test[[i]] <- doptimaldesign[, c(1, i+1)]
+      p.prob[[i]] <- exp(x.test[[i]][,2])/(1+exp(x.test[[i]][,2]))
+    }
+    
+    
+    # eta <- eta_fun(x, z, q, r)
+    # p <- exp(eta)/(1 + exp(eta))
+    # y <- rbinom(t, 1, p)
+    
+    access.element <- function(df, n){
+      
+      sapply(df, '[', n)
+      
+    }
+    
+    # for(u in 1:n){
+    #   
+    #   p.people[[u]] <- max(access.element(p.prob, u))
+    #   y.people[[u]] <- rbinom(t, 1, p.people[[u]])
+    # }
+    
+    # y<- c()
+    # 
+    # for (coun in 1:n){
+    #   
+    #   y <- append(y, as.vector(y.people[[coun]]))
+    #   
+    # }
+    
+    y <- c()
+    
+    for (coun in 1:15){
+      
+      y[coun] <- min(access.element(y.people, coun))
+      
+    }
+
+    p.test <- c()
+    y.test <- c()
+    
+    x.testpeople <- c()
+    x.normalizedtest <- c()
+    for(k in 1:n){
+      
+      x.testpeople[[k]] <- new.data[,k+8] 
+      
+    }
+    
+    ubar.test <- rowMeans(new.data[,9:lastcolumn])
+    all.utility <- new.data[9:lastcolumn]
+    
+    group.welfare <- rowMeans2(as.matrix(log(all.utility+abs(min(all.utility))+0.0000001)))
+    
+    kemeny.eta <- exp(kemeny.test)/(1+exp(kemeny.test))
+    
+    nash.social.wefare <- log(kemeny.eta)
+    nash.social <- rowSums(nash.social.wefare)
+    ptest <- exp(nash.social)/(1+exp(nash.social))
+    
+    #p.test <- rep(ptest, times = n)
+    p.test <- ptest
+    y.testall <- c()
+    for(testcount in 1:length(ptest)){
+      
+      y.testall[testcount] <- rbinom(1,1, ptest[testcount])
+      
+    }
+    #y <- append(y.x, y.z)%>%
+    #append(y.q)%>%
+    #append(y.r)
+    
+    #ytest <- append(as.factor(y.x), as.factor(y.z))%>%
+    #append(as.factor(y.q))%>%
+    #append(as.factor(y.r))
+    
+    
+    # etatest <- eta_fun(x.test, z.test, q.test, r.test)
+    # ptest <- exp(etatest)/(1 + exp(etatest))
+    # ytest <- factor(rbinom(162, 1, ptest))
+    # 
+    
+    
+    ubar_fun <- function(a, b, c, d) apply(cbind(a, b, c, d), 1, mean)    
+    S_fun <- function(a, b, c, d) apply(cbind(a, b, c, d), 1, sd)    
+    ubar <- ubar.normal
+    
+    UBAR_repeat <- rep(ubar, times = n)
+    
+    S <- c()
+    
+    S <- rowSds(doptimaldesign[,2:peopleplus1])
+    
+    S_repeat <- rep(S, times = n)
+    
+    ubartest <- c()
+    ubartest <- ubar.test
+    
+    Stest <- c()
+    Stest <- rowSds(as.matrix(new.data[,9:lastcolumn]))
+    
+    ubartest_repeat <- rep(ubartest, times = n)
+    stest_repeat <- rep(Stest, times = n)
+    
+    
+    cGLM1 <- constGLM1multiple(X = cbind(ubar, S), y = y, Xtest = cbind(ubartest, Stest))
+    
+    y.predicted <- c()
+    
+    for (predictedcount in 1:length(cGLM1[[2]])){
+      
+      y.predicted[predictedcount] <- rbinom(1,1, cGLM1[[2]][predictedcount])
+      
+    }
+    
+    auc.value[[m]] <- auc(y.testall, y.predicted)
+    
+    id.max[[m]] <- which.max(cGLM1[[2]])
+    group.welfare[[m]] <- which.max(nash.social)
+    pars.list[[m]] <- cGLM1[[1]]
+    prob[[m]] <- cGLM1[[2]]
+    corscglm[m] <- cor(cGLM1[[2]], ptest)
+    plot(cGLM1[[2]], ptest, xlim = c(0, 1), ylim = c(0, 1))
+    print(corscglm[m])
+  }  
+  
+  output <- list(id.max,group.welfare, pars.list, prob, corscglm, auc.value)
+  
+  return(output)
+}
+
+group.search.minmaxmultiplegini <- function(a, t, g, n){
+  
+  alpha.disadvantage <- 1
+  lastcolumn <- 8+n
+  beta.advantage <- 1
+  peopleminus1 <- n-1
+  peopleplus1 <- n+1
+  id.max <- c()
+  pars.list <- c()
+  prob <- c()
+  corscglm <- c()
+  max.groupwelfare <- c()
+  auc.value <- c()
+  for(m in 1:g){
+    
+    
+    new.data <- a
+    optimal.design.matrix <- as.matrix(a[8:lastcolumn])
+    
+    doptimaldesign <- optimal.design.matrix[c(sample(1:162, 15)),]
+    
+    x.test <- c()
+    p.prob <- c()
+    y.people <- c()
+    p.people <- c()
+    
+    for (i in 1:n){
+      
+      x.test[[i]] <- doptimaldesign[, c(1, i+1)]
+      
+    }
+    
+    x.normalized <- c()
+    ubar.normal <- rowMeans(doptimaldesign[,2:peopleplus1])
+    
+    for (z in 1:n){
+      
+      x.reference <- c()
+      counter = z+1
+      excluded.column <- doptimaldesign[,-counter]
+      
+      for (w in 1:15){
+        
+
+        x.ref <- 0
+        
+        for (o in 2:n){
+          
+          x.ref <- (x.test[[z]][w,2] - excluded.column[[w,o]]) + x.ref
+          
+        }
+        
+        x.reference[[w]] <- ubar.normal[w] - (alpha.disadvantage/(n-1))*x.ref
+        
+      }
+      
+      x.normalized[[z]] <- x.reference 
+      
+    }
+    
+    for(i in 1:n){
+      
+      p.prob[[i]] <- exp(x.normalized[[i]])/(1+exp(x.normalized[[i]]))
+      for(modelcount in 1:15){
+        y.temp[modelcount] <- rbinom(1,1,p.prob[[i]][modelcount])
+      }
+      y.people[[i]] <- y.temp
+    }
+    
+    
+    # eta <- eta_fun(x, z, q, r)
+    # p <- exp(eta)/(1 + exp(eta))
+    # y <- rbinom(t, 1, p)
+    
+    access.element <- function(df, n){
+      
+      sapply(df, '[', n)
+      
+    }
+    
+    # for(u in 1:n){
+    #   
+    #   p.people[[u]] <- max(access.element(p.prob, u))
+    #   y.people[[u]] <- rbinom(t, 1, p.people[[u]])
+    # }
+    
+    y <- c()
+    
+    for (coun in 1:n){
+      
+      y <- append(y, as.vector(y.people[[coun]]))
+      
+    }
+    
+    p.test <- c()
+    y.test <- c()
+    
+    x.testpeople <- c()
+    x.normalizedtest <- c()
+    for(k in 1:n){
+      
+      x.testpeople[[k]] <- new.data[,k+8] 
+      
+    }
+    
+    ubar.test <- rowMeans(new.data[,9:lastcolumn])
+    all.utility <- new.data[9:lastcolumn]
+    
+    for (ztest in 1:n){
+      
+      x.referencetest <- c()
+      excluded.columntest <- all.utility[,-ztest]
+      
+      for (wtest in 1 :162){
+        
+        
+        x.reftest <- 0
+        
+        for (otest in 1:peopleminus1){
+          
+          x.reftest <- (x.testpeople[[ztest]][wtest] - excluded.columntest[[wtest,otest]]) + x.reftest
+          
+        }
+        
+        x.referencetest[[wtest]] <- ubar.test[wtest] - (alpha.disadvantage/(n-1))*x.reftest
+        
+      }
+      
+      x.normalizedtest[[ztest]] <- x.referencetest 
+      
+    }
+    
+    
+    
+    group.welfare <- c()
+    
+    for(questioncount in 1:162){
+      
+      group.welfare[questioncount] <- mean(access.element(x.normalizedtest, questioncount))
+      
+    }
+    
+    ptest <- exp(group.welfare)/(1+ exp(group.welfare))
+    
+    p.test <- rep(ptest, times = n)
+    
+    y.testall <- c()
+    for (ycount in 1:length(p.test)){
+      
+      y.testall[ycount] <- rbinom(1, 1, p.test[ycount])
+    }
+    
+    #y <- append(y.x, y.z)%>%
+    #append(y.q)%>%
+    #append(y.r)
+    
+    #ytest <- append(as.factor(y.x), as.factor(y.z))%>%
+    #append(as.factor(y.q))%>%
+    #append(as.factor(y.r))
+    
+    
+    # etatest <- eta_fun(x.test, z.test, q.test, r.test)
+    # ptest <- exp(etatest)/(1 + exp(etatest))
+    # ytest <- factor(rbinom(162, 1, ptest))
+    # 
+    
+    
+    ubar_fun <- function(a, b, c, d) apply(cbind(a, b, c, d), 1, mean)    
+    S_fun <- function(a, b, c, d) apply(cbind(a, b, c, d), 1, sd)    
+    ubar <- ubar.normal
+    
+    UBAR_repeat <- rep(ubar, times = n)
+    
+    S <- c()
+    
+    S <- rowSds(doptimaldesign[,2:peopleplus1])
+    
+    S_repeat <- rep(S, times = n)
+    
+    ubartest <- c()
+    ubartest <- ubar.test
+    
+    Stest <- c()
+    Stest <- rowSds(as.matrix(new.data[,9:lastcolumn]))
+    
+    ubartest_repeat <- rep(ubartest, times = n)
+    stest_repeat <- rep(Stest, times = n)
+    
+    
+    cGLM1 <- constGLM1multiple(X = cbind(UBAR_repeat, S_repeat), y = y, Xtest = cbind(ubartest_repeat, stest_repeat))
+    
+    y.predicted <- c()
+    
+    for(totalength in 1:length(cGLM1[[2]])){
+      
+      y.predicted[totalength] <- rbinom(1, 1, cGLM1[[2]][totalength])
+      
+    }
+    
+    auc.value[[m]] <- auc(y.testall, y.predicted)
+    
+    id.max[[m]] <- which.max(cGLM1[[2]])
+    max.groupwelfare[[m]] <- which.max(group.welfare)
+    pars.list[[m]] <- cGLM1[[1]]
+    prob[[m]] <- cGLM1[[2]]
+    corscglm[m] <- cor(cGLM1[[2]], p.test)
+    plot(cGLM1[[2]], p.test, xlim = c(0, 1), ylim = c(0, 1))
+    print(corscglm[m])
+  }  
+  
+  output <- list(id.max, max.groupwelfare, pars.list, prob, corscglm, auc.value)
+  
+  return(output)
+}
+
+group.search.min <- function(a, t, g, n){
+  
+  alpha.disadvantage <- 1
+  lastcolumn <- 8+n
+  beta.advantage <- 1
+  peopleminus1 <- n-1
+  peopleplus1 <- n+1
+  id.max <- c()
+  pars.list <- c()
+  prob <- c()
+  corscglm <- c()
+  max.groupwelfare <- c()
+  auc.value <- c()
+  for(m in 1:g){
+    
+    
+    new.data <- a
+    optimal.design.matrix <- as.matrix(a[8:lastcolumn])
+    
+    doptimaldesign <- optimal.design.matrix[c(sample(1:162, 15)),]
+    
+    x.test <- c()
+    p.prob <- c()
+    y.people <- c()
+    p.people <- c()
+    y <- c()
+    
+    for (i in 1:n){
+      
+      x.test[[i]] <- doptimaldesign[, c(1, i+1)]
+      p.prob[[i]] <- exp(x.test[[i]][,2])/(1+exp(x.test[[i]][,2]))
+    }
+    
+    access.element <- function(df, n){
+      
+      sapply(df, '[', n)
+      
+    }
+    
+    
+    # eta <- eta_fun(x, z, q, r)
+    # p <- exp(eta)/(1 + exp(eta))
+    # y <- rbinom(t, 1, p)
+    
+    access.element <- function(df, n){
+      
+      sapply(df, '[', n)
+      
+    }
+    
+    for(u in 1:t){
+
+      p.people[[u]] <- min(access.element(p.prob, u))
+    }
+    
+    p.people1 <- rep(p.people, times = n)
+    
+    for (testcount in 1:length(p.people1)){
+      
+      y[testcount] <- rbinom(1, 1, p.people1[testcount])  
+      
+    }
+    
+    
+    p.test <- c()
+    y.test <- c()
+    
+    x.testpeople <- c()
+    x.normalizedtest <- c()
+    p.testpeople <- c()
+    for(k in 1:n){
+      
+      x.testpeople[[k]] <- new.data[,k+8] 
+      p.testpeople[[k]] <- exp(x.testpeople[[k]])/(1+exp(x.testpeople[[k]]))
+      
+    }
+    
+    for(u in 1:162){
+      
+      ptest[[u]] <- min(access.element(p.testpeople, u))
+    }
+   
+    ptest1 <- rep(ptest, times = n)
+    
+    y.testall <- c()
+    for(testcount in 1:length(ptest1)){
+      
+      y.testall[testcount] <- rbinom(1,1,ptest1[testcount])
+      
+    }
+
+    ubar.test <- rowMeans(new.data[,9:lastcolumn])
+    all.utility <- new.data[9:lastcolumn]
+
+    
+    #y <- append(y.x, y.z)%>%
+    #append(y.q)%>%
+    #append(y.r)
+    
+    #ytest <- append(as.factor(y.x), as.factor(y.z))%>%
+    #append(as.factor(y.q))%>%
+    #append(as.factor(y.r))
+    
+    
+    # etatest <- eta_fun(x.test, z.test, q.test, r.test)
+    # ptest <- exp(etatest)/(1 + exp(etatest))
+    # ytest <- factor(rbinom(162, 1, ptest))
+    # 
+    
+    
+    ubar_fun <- function(a, b, c, d) apply(cbind(a, b, c, d), 1, mean)    
+    S_fun <- function(a, b, c, d) apply(cbind(a, b, c, d), 1, sd)    
+    ubar <- ubar.normal
+    
+    UBAR_repeat <- rep(ubar, times = n)
+    
+    S <- c()
+    
+    S <- rowSds(doptimaldesign[,2:peopleplus1])
+    
+    S_repeat <- rep(S, times = n)
+    
+    ubartest <- c()
+    ubartest <- ubar.test
+    
+    Stest <- c()
+    Stest <- rowSds(as.matrix(new.data[,9:lastcolumn]))
+    
+    ubartest_repeat <- rep(ubartest, times = n)
+    stest_repeat <- rep(Stest, times = n)
+    
+    
+    cGLM1 <- constGLM1multiple(X = cbind(UBAR_repeat, S_repeat), 
+                               y = y, Xtest = cbind(ubartest_repeat, stest_repeat))
+    
+    y.predicted <- c()
+    for(modelcount in 1:length(cGLM1[[2]])){
+      
+      y.predicted[modelcount] <- rbinom(1,1,cGLM1[[2]][modelcount])
+      
+    }
+    
+    auc.value[m] <- auc(y.testall, y.predicted)
+    id.max[[m]] <- which.max(cGLM1[[2]])
+    max.groupwelfare[m] <- which.max(ptest1)
+    pars.list[[m]] <- cGLM1[[1]]
+    prob[[m]] <- cGLM1[[2]]
+    corscglm[m] <- cor(cGLM1[[2]], ptest1)
+    plot(cGLM1[[2]], ptest1, xlim = c(0, 1), ylim = c(0, 1))
+    print(corscglm[m])
+  }  
+  
+  output <- list(id.max, max.groupwelfare, pars.list, prob, corscglm, auc.value)
+  
+  return(output)
+}
+group.search.max <- function(a, t, g, n){
+  
+  alpha.disadvantage <- 1
+  lastcolumn <- 8+n
+  beta.advantage <- 1
+  peopleminus1 <- n-1
+  peopleplus1 <- n+1
+  id.max <- c()
+  pars.list <- c()
+  prob <- c()
+  corscglm <- c()
+  max.groupwelfare <- c()
+  auc.value <- c()
+  for(m in 1:g){
+    
+    
+    new.data <- a
+    optimal.design.matrix <- as.matrix(a[8:lastcolumn])
+    
+    doptimaldesign <- optimal.design.matrix[c(sample(1:162, 15)),]
+    
+    x.test <- c()
+    p.prob <- c()
+    y.people <- c()
+    p.people <- c()
+    
+    for (i in 1:n){
+      
+      x.test[[i]] <- doptimaldesign[, c(1, i+1)]
+      p.prob[[i]] <- exp(x.test[[i]][,2])/(1+exp(x.test[[i]][,2]))
+    }
+    
+    access.element <- function(df, n){
+      
+      sapply(df, '[', n)
+      
+    }
+    
+    
+    # eta <- eta_fun(x, z, q, r)
+    # p <- exp(eta)/(1 + exp(eta))
+    # y <- rbinom(t, 1, p)
+
+    for(u in 1:t){
+      
+      p.people[[u]] <- max(access.element(p.prob, u))
+    }
+    
+    p.people1 <- rep(p.people, times = n)
+      
+    y <- c()
+    for(modelcount in 1:length(p.people1)){
+      
+      y[modelcount] <- rbinom(1, 1, p.people1[modelcount])
+      
+    }
+    
+    
+    p.test <- c()
+    y.test <- c()
+    
+    x.testpeople <- c()
+    x.normalizedtest <- c()
+    p.testpeople <- c()
+    for(k in 1:n){
+      
+      x.testpeople[[k]] <- new.data[,k+8] 
+      p.testpeople[[k]] <- exp(x.testpeople[[k]])/(1+exp(x.testpeople[[k]]))
+      
+    }
+    
+    for(u in 1:162){
+      
+      ptest[[u]] <- max(access.element(p.testpeople, u))
+    }
+    
+    ptest1 <- rep(ptest, times = n)
+    
+    y.testall <- c()
+    for(testcount in 1:length(ptest1)){
+      
+      y.testall[testcount] <- rbinom(1,1,ptest1[testcount])
+      
+    }
+    
+    ubar.test <- rowMeans(new.data[,9:lastcolumn])
+    all.utility <- new.data[9:lastcolumn]
+    
+    
+    #y <- append(y.x, y.z)%>%
+    #append(y.q)%>%
+    #append(y.r)
+    
+    #ytest <- append(as.factor(y.x), as.factor(y.z))%>%
+    #append(as.factor(y.q))%>%
+    #append(as.factor(y.r))
+    
+    
+    # etatest <- eta_fun(x.test, z.test, q.test, r.test)
+    # ptest <- exp(etatest)/(1 + exp(etatest))
+    # ytest <- factor(rbinom(162, 1, ptest))
+    # 
+    
+    
+    ubar_fun <- function(a, b, c, d) apply(cbind(a, b, c, d), 1, mean)    
+    S_fun <- function(a, b, c, d) apply(cbind(a, b, c, d), 1, sd)    
+    ubar <- ubar.normal
+    
+    UBAR_repeat <- rep(ubar, times = n)
+    
+    S <- c()
+    
+    S <- rowSds(doptimaldesign[,2:peopleplus1])
+    
+    S_repeat <- rep(S, times = n)
+    
+    ubartest <- c()
+    ubartest <- ubar.test
+    
+    Stest <- c()
+    Stest <- rowSds(as.matrix(new.data[,9:lastcolumn]))
+    
+    ubartest_repeat <- rep(ubartest, times = n)
+    stest_repeat <- rep(Stest, times = n)
+    
+    
+    cGLM1 <- constGLM1multiple(X = cbind(UBAR_repeat, S_repeat), 
+                               y = y, Xtest = cbind(ubartest_repeat, stest_repeat))
+    
+    y.predicted <- c()
+    
+    for(predictedcount in 1:length(cGLM1[[2]])){
+      
+      y.predicted[predictedcount] <- rbinom(1,1,cGLM1[[2]][predictedcount])
+    }
+    
+    auc.value[m] <- auc(y.testall, y.predicted)
+    id.max[[m]] <- which.max(cGLM1[[2]])
+    max.groupwelfare[m] <- which.max(ptest1)
+    pars.list[[m]] <- cGLM1[[1]]
+    prob[[m]] <- cGLM1[[2]]
+    corscglm[m] <- cor(cGLM1[[2]], ptest1)
+    plot(cGLM1[[2]], ptest1, xlim = c(0, 1), ylim = c(0, 1))
+    print(corscglm[m])
+  }  
+  
+  output <- list(id.max, max.groupwelfare, pars.list, prob, corscglm, auc.value)
+  
+  return(output)
+}
+
+group.search.util <- function(a, t, g, n){
+  
+  alpha.disadvantage <- 1
+  lastcolumn <- 8+n
+  beta.advantage <- 1
+  peopleminus1 <- n-1
+  peopleplus1 <- n+1
+  id.max <- c()
+  pars.list <- c()
+  prob <- c()
+  corscglm <- c()
+  max.groupwelfare <- c()
+  auc.value <- c()
+  for(m in 1:g){
+    
+    
+    new.data <- a
+    optimal.design.matrix <- as.matrix(a[8:lastcolumn])
+    
+    doptimaldesign <- optimal.design.matrix[c(sample(1:162, 15)),]
+    
+    x.test <- c()
+    p.prob <- c()
+    y.people <- c()
+    p.people <- c()
+    
+    for (i in 1:n){
+      
+      x.test[[i]] <- doptimaldesign[, c(1, i+1)]
+      p.prob[[i]] <- exp(x.test[[i]][,2])/(1+exp(x.test[[i]][,2]))
+    }
+    
+    for (people in 1:n){
+      
+      p.people <- append(p.people, as.vector(p.prob[[people]]))
+      
+    }
+    
+    
+    y <- c()
+    
+    for (modelcount in 1:length(p.people)){
+      
+      y[modelcount] <- rbinom(1,1,p.people[modelcount])
+      
+    }
+    
+    p.test <- c()
+    y.test <- c()
+    
+    x.testpeople <- c()
+    x.normalizedtest <- c()
+    p.testpeople <- c()
+    prob.test <- c()
+    for(k in 1:n){
+      
+      x.testpeople[[k]] <- new.data[,k+8] 
+      p.testpeople[[k]] <- exp(x.testpeople[[k]])/(1+exp(x.testpeople[[k]]))
+      
+    }
+    
+    
+    ubar.test <- rowMeans(new.data[,9:lastcolumn])
+    all.utility <- new.data[9:lastcolumn]
+    
+    group.welfare <- c()
+    
+    for(questioncount in 1:162){
+      
+      group.welfare[questioncount] <- ubar.test[questioncount]
+      prob.test[questioncount] <- exp(group.welfare[questioncount])/(1+exp(group.welfare[questioncount]))
+    }
+    
+    p.test <- rep(prob.test, times = n)
+    y.testall <- c()
+    for(testcount in 1:length(p.test)){
+      
+      # y.testall[testcount] <- rbinom(1,1, p.test[testcount])
+      y.testall[testcount] <- ifelse(p.test[testcount] > 0.5, 1, 0)
+      
+    }
+    
+    #y <- append(y.x, y.z)%>%
+    #append(y.q)%>%
+    #append(y.r)
+    
+    #ytest <- append(as.factor(y.x), as.factor(y.z))%>%
+    #append(as.factor(y.q))%>%
+    #append(as.factor(y.r))
+    
+    
+    # etatest <- eta_fun(x.test, z.test, q.test, r.test)
+    # ptest <- exp(etatest)/(1 + exp(etatest))
+    # ytest <- factor(rbinom(162, 1, ptest))
+    # 
+    
+    
+    ubar_fun <- function(a, b, c, d) apply(cbind(a, b, c, d), 1, mean)    
+    S_fun <- function(a, b, c, d) apply(cbind(a, b, c, d), 1, sd)    
+    ubar <- ubar.normal
+    
+    UBAR_repeat <- rep(ubar, times = n)
+    
+    S <- c()
+    
+    S <- rowSds(doptimaldesign[,2:peopleplus1])
+    
+    S_repeat <- rep(S, times = n)
+    
+    ubartest <- c()
+    ubartest <- ubar.test
+    
+    Stest <- c()
+    Stest <- rowSds(as.matrix(new.data[,9:lastcolumn]))
+    
+    ubartest_repeat <- rep(ubartest, times = n)
+    stest_repeat <- rep(Stest, times = n)
+    
+    
+    cGLM1 <- constGLM1multiple(X = cbind(UBAR_repeat, S_repeat), y = y, Xtest = cbind(ubartest_repeat, stest_repeat))
+    
+    y.predicted <- c()
+    for (predictedcount in 1:length(cGLM1[[2]])){
+      
+      y.predicted[predictedcount] <- ifelse(cGLM1[[2]][predictedcount] >0.5, 1, 0)
+      
+    }
+    
+    auc.value[[m]] <- auc(y.testall, y.predicted)
+    id.max[[m]] <- which.max(cGLM1[[2]])
+    max.groupwelfare[m] <- which.max(p.test)
+    pars.list[[m]] <- cGLM1[[1]]
+    prob[[m]] <- cGLM1[[2]]
+    corscglm[m] <- cor(cGLM1[[2]], p.test)
+    plot(cGLM1[[2]], p.test, xlim = c(0, 1), ylim = c(0, 1))
+    print(corscglm[m])
+  }  
+  
+  output <- list(id.max, max.groupwelfare, pars.list, prob, corscglm, auc.value)
+  
+  return(output)
+}
+
+group.util.generation <- function(n){
+  
+  putilnames <- paste0("p", 1:n, ".utility")
+  pnames <- paste0("p", 1:n)
+  putils <- vector(mode="list", length = length(pnames))
+  names(putils) <- pnames
+  putils <- lapply(putils, function(L){
+    
+    L[[1]] <- utility.generation(utility.matrix, runif(1, min = -3, max =3), runif(1, min = -3, max =3),
+                                 runif(1, min = -3, max =3),runif(1, min = -3, max =3),
+                                 runif(1, min = -3, max =3),runif(1, min = -3, max =3),
+                                 runif(1, min = -3, max =3), runif(1, min = -3, max =3))
+    
+    L[[2]] <- utility.calculation(ut.matrix, as.numeric(L[[1]][1]),as.numeric(L[[1]][2]),
+                                  as.numeric(L[[1]][3]),as.numeric(L[[1]][4]),
+                                  as.numeric(L[[1]][5]),as.numeric(L[[1]][6]),
+                                  as.numeric(L[[1]][7]),as.numeric(L[[1]][8]))
+    
+    L[[3]] <- dplyr::select(L[[2]], id, utility); L
+    
+  })
+  
+  group.utility <- inner_join(ut.matrix, as.data.frame(putils[[1]][3]), by= "id")
+  
+  for(i in 2:n){
+    
+    group.utility <- inner_join(group.utility, as.data.frame(putils[[i]][3]), by = "id")
+    
+  }
+  
+  group.names <- c("nuc.power1", "nuc.power2", "CO2Price", "ban.fuel.explore1", "ban.fuel.explore2", "RFS1", "RFS2", "id", putilnames)
+  
+  names(group.utility) <- group.names
+  
+  lastcolumn <- 8+n
+  group.score <- rowMeans(group.utility[9:lastcolumn])
+  
+  group.utility <- cbind(group.utility, group.score)%>%
+    arrange(desc(group.score))
+  
+  return(group.utility)
+  
+}
+
+a <- group.util.generation(10)
+
+testing.multiple <- function(t, n, g){
+  b <- list()
+  a <- group.util.generation(n)
+  b <- group.search.minmax1(a, n, g)
+  return(b)
+  
+}
+
+
+test.multiple.Nash4 <- group.search.minmaxmultiple(a, 15, 1000, 4)
+
+test.multiple.Nash6 <- group.search.minmaxmultiple(a, 15, 1000, 6)
+
+test.multiple.Nash8 <- group.search.minmaxmultiple(a, 15, 1000, 8)
+
+test.multiple.Nash10 <- group.search.minmaxmultiple(a, 15, 1000, 10)
+
+test.multiple.gini4 <- group.search.minmaxmultiplegini(a, 15, 1000, 4)
+
+test.multiple.gini6 <- group.search.minmaxmultiplegini(a, 15, 1000, 6)
+
+test.multiple.gini8 <- group.search.minmaxmultiplegini(a, 15, 1000, 8)
+
+test.multiple.gini10 <- group.search.minmaxmultiplegini(a, 15, 1000, 10)
+
+test.multiple.min4 <- group.search.min(a, 15, 1000, 4)
+
+test.multiple.min6 <- group.search.min(a, 15, 1000, 6)
+
+test.multiple.min8 <- group.search.min(a, 15, 1000, 8)
+
+test.multiple.min10 <- group.search.min(a, 15, 1000, 10)
+
+test.multiple.max4 <- group.search.max(a, 15, 1000, 4)
+
+test.multiple.max6 <- group.search.max(a, 15, 1000, 6)
+
+test.multiple.max8 <- group.search.max(a, 15, 1000, 8)
+
+test.multiple.max10 <- group.search.max(a, 15, 1000, 10)
+
+test.multiple.util4 <- group.search.util(a, 15, 1000, 4)
+
+test.multiple.util6 <- group.search.util(a, 15, 1000, 6)
+
+test.multiple.util8 <- group.search.util(a, 15, 1000, 8)
+
+test.multiple.util10 <- group.search.util(a, 15, 1000, 10)
+
+
+group.benchmark.minmaxmultiplegini <- function(a, t, g, n){
+  
+  alpha.disadvantage <- 1
+  lastcolumn <- 8+n
+  beta.advantage <- 1
+  peopleminus1 <- n-1
+  peopleplus1 <- n+1
+  id.max <- c()
+  pars.list <- c()
+  prob <- c()
+  corscglm <- c()
+  max.groupwelfare <- c()
+  auc.value <- c()
+  for(m in 1:g){
+    
+    
+    new.data <- a
+    optimal.design.matrix <- as.matrix(a[8:lastcolumn])
+    
+    doptimaldesign <- optimal.design.matrix[c(sample(1:162, 15)),]
+    
+    x.test <- c()
+    p.prob <- c()
+    y.people <- c()
+    p.people <- c()
+    
+    for (i in 1:n){
+      
+      x.test[[i]] <- doptimaldesign[, c(1, i+1)]
+      
+    }
+    
+    x.normalized <- c()
+    ubar.normal <- rowMeans(doptimaldesign[,2:peopleplus1])
+    
+    for (z in 1:n){
+      
+      x.reference <- c()
+      counter = z+1
+      excluded.column <- doptimaldesign[,-counter]
+      
+      for (w in 1:15){
+        
+        
+        x.ref <- 0
+        
+        for (o in 2:n){
+          
+          x.ref <- (x.test[[z]][w,2] - excluded.column[[w,o]]) + x.ref
+          
+        }
+        
+        x.reference[[w]] <- ubar.normal[w] - (alpha.disadvantage/(n-1))*x.ref
+        
+      }
+      
+      x.normalized[[z]] <- x.reference 
+      
+    }
+    
+    for(i in 1:n){
+      
+      p.prob[[i]] <- exp(x.normalized[[i]])/(1+exp(x.normalized[[i]]))
+      for(modelcount in 1:15){
+        y.temp[modelcount] <- rbinom(1,1,p.prob[[i]][modelcount])
+      }
+      y.people[[i]] <- y.temp
+    }
+    
+    
+    # eta <- eta_fun(x, z, q, r)
+    # p <- exp(eta)/(1 + exp(eta))
+    # y <- rbinom(t, 1, p)
+    
+    access.element <- function(df, n){
+      
+      sapply(df, '[', n)
+      
+    }
+    
+    # for(u in 1:n){
+    #   
+    #   p.people[[u]] <- max(access.element(p.prob, u))
+    #   y.people[[u]] <- rbinom(t, 1, p.people[[u]])
+    # }
+    
+    
+   
+    
+    auc.value[[m]] <- auc(y.testall, y.predicted)
+    
+    id.max[[m]] <- which.max(cGLM1[[2]])
+    max.groupwelfare[[m]] <- which.max(group.welfare)
+    pars.list[[m]] <- cGLM1[[1]]
+    prob[[m]] <- cGLM1[[2]]
+    corscglm[m] <- cor(cGLM1[[2]], p.test)
+    plot(cGLM1[[2]], p.test, xlim = c(0, 1), ylim = c(0, 1))
+    print(corscglm[m])
+  }  
+  
+  output <- list(id.max, max.groupwelfare, pars.list, prob, corscglm, auc.value)
+  
+  return(output)
+}
+
+group.search.min <- function(a, t, g, n){
+  
+  alpha.disadvantage <- 1
+  lastcolumn <- 8+n
+  beta.advantage <- 1
+  peopleminus1 <- n-1
+  peopleplus1 <- n+1
+  id.max <- c()
+  pars.list <- c()
+  prob <- c()
+  corscglm <- c()
+  max.groupwelfare <- c()
+  auc.value <- c()
+  for(m in 1:g){
+    
+    
+    new.data <- a
+    optimal.design.matrix <- as.matrix(a[8:lastcolumn])
+    
+    doptimaldesign <- optimal.design.matrix[c(sample(1:162, 15)),]
+    
+    x.test <- c()
+    p.prob <- c()
+    y.people <- c()
+    p.people <- c()
+    y <- c()
+    
+    for (i in 1:n){
+      
+      x.test[[i]] <- doptimaldesign[, c(1, i+1)]
+      p.prob[[i]] <- exp(x.test[[i]][,2])/(1+exp(x.test[[i]][,2]))
+    }
+    
+    access.element <- function(df, n){
+      
+      sapply(df, '[', n)
+      
+    }
+    
+    
+    # eta <- eta_fun(x, z, q, r)
+    # p <- exp(eta)/(1 + exp(eta))
+    # y <- rbinom(t, 1, p)
+    
+    access.element <- function(df, n){
+      
+      sapply(df, '[', n)
+      
+    }
+    
+    for(u in 1:t){
+      
+      p.people[[u]] <- min(access.element(p.prob, u))
+    }
+    
+    p.people1 <- rep(p.people, times = n)
+    
+    for (testcount in 1:length(p.people1)){
+      
+      y[testcount] <- rbinom(1, 1, p.people1[testcount])  
+      
+    }
+    
+    
+    p.test <- c()
+    y.test <- c()
+    
+    x.testpeople <- c()
+    x.normalizedtest <- c()
+    p.testpeople <- c()
+    for(k in 1:n){
+      
+      x.testpeople[[k]] <- new.data[,k+8] 
+      p.testpeople[[k]] <- exp(x.testpeople[[k]])/(1+exp(x.testpeople[[k]]))
+      
+    }
+    
+    for(u in 1:162){
+      
+      ptest[[u]] <- min(access.element(p.testpeople, u))
+    }
+    
+    ptest1 <- rep(ptest, times = n)
+    
+    y.testall <- c()
+    for(testcount in 1:length(ptest1)){
+      
+      y.testall[testcount] <- rbinom(1,1,ptest1[testcount])
+      
+    }
+    
+    ubar.test <- rowMeans(new.data[,9:lastcolumn])
+    all.utility <- new.data[9:lastcolumn]
+    
+    
+    #y <- append(y.x, y.z)%>%
+    #append(y.q)%>%
+    #append(y.r)
+    
+    #ytest <- append(as.factor(y.x), as.factor(y.z))%>%
+    #append(as.factor(y.q))%>%
+    #append(as.factor(y.r))
+    
+    
+    # etatest <- eta_fun(x.test, z.test, q.test, r.test)
+    # ptest <- exp(etatest)/(1 + exp(etatest))
+    # ytest <- factor(rbinom(162, 1, ptest))
+    # 
+    
+    
+    ubar_fun <- function(a, b, c, d) apply(cbind(a, b, c, d), 1, mean)    
+    S_fun <- function(a, b, c, d) apply(cbind(a, b, c, d), 1, sd)    
+    ubar <- ubar.normal
+    
+    UBAR_repeat <- rep(ubar, times = n)
+    
+    S <- c()
+    
+    S <- rowSds(doptimaldesign[,2:peopleplus1])
+    
+    S_repeat <- rep(S, times = n)
+    
+    ubartest <- c()
+    ubartest <- ubar.test
+    
+    Stest <- c()
+    Stest <- rowSds(as.matrix(new.data[,9:lastcolumn]))
+    
+    ubartest_repeat <- rep(ubartest, times = n)
+    stest_repeat <- rep(Stest, times = n)
+    
+    
+    cGLM1 <- constGLM1multiple(X = cbind(UBAR_repeat, S_repeat), 
+                               y = y, Xtest = cbind(ubartest_repeat, stest_repeat))
+    
+    y.predicted <- c()
+    for(modelcount in 1:length(cGLM1[[2]])){
+      
+      y.predicted[modelcount] <- rbinom(1,1,cGLM1[[2]][modelcount])
+      
+    }
+    
+    auc.value[m] <- auc(y.testall, y.predicted)
+    id.max[[m]] <- which.max(cGLM1[[2]])
+    max.groupwelfare[m] <- which.max(ptest1)
+    pars.list[[m]] <- cGLM1[[1]]
+    prob[[m]] <- cGLM1[[2]]
+    corscglm[m] <- cor(cGLM1[[2]], ptest1)
+    plot(cGLM1[[2]], ptest1, xlim = c(0, 1), ylim = c(0, 1))
+    print(corscglm[m])
+  }  
+  
+  output <- list(id.max, max.groupwelfare, pars.list, prob, corscglm, auc.value)
+  
+  return(output)
+}
+group.search.max <- function(a, t, g, n){
+  
+  alpha.disadvantage <- 1
+  lastcolumn <- 8+n
+  beta.advantage <- 1
+  peopleminus1 <- n-1
+  peopleplus1 <- n+1
+  id.max <- c()
+  pars.list <- c()
+  prob <- c()
+  corscglm <- c()
+  max.groupwelfare <- c()
+  auc.value <- c()
+  for(m in 1:g){
+    
+    
+    new.data <- a
+    optimal.design.matrix <- as.matrix(a[8:lastcolumn])
+    
+    doptimaldesign <- optimal.design.matrix[c(sample(1:162, 15)),]
+    
+    x.test <- c()
+    p.prob <- c()
+    y.people <- c()
+    p.people <- c()
+    
+    for (i in 1:n){
+      
+      x.test[[i]] <- doptimaldesign[, c(1, i+1)]
+      p.prob[[i]] <- exp(x.test[[i]][,2])/(1+exp(x.test[[i]][,2]))
+    }
+    
+    access.element <- function(df, n){
+      
+      sapply(df, '[', n)
+      
+    }
+    
+    
+    # eta <- eta_fun(x, z, q, r)
+    # p <- exp(eta)/(1 + exp(eta))
+    # y <- rbinom(t, 1, p)
+    
+    for(u in 1:t){
+      
+      p.people[[u]] <- max(access.element(p.prob, u))
+    }
+    
+    p.people1 <- rep(p.people, times = n)
+    
+    y <- c()
+    for(modelcount in 1:length(p.people1)){
+      
+      y[modelcount] <- rbinom(1, 1, p.people1[modelcount])
+      
+    }
+    
+    
+    p.test <- c()
+    y.test <- c()
+    
+    x.testpeople <- c()
+    x.normalizedtest <- c()
+    p.testpeople <- c()
+    for(k in 1:n){
+      
+      x.testpeople[[k]] <- new.data[,k+8] 
+      p.testpeople[[k]] <- exp(x.testpeople[[k]])/(1+exp(x.testpeople[[k]]))
+      
+    }
+    
+    for(u in 1:162){
+      
+      ptest[[u]] <- max(access.element(p.testpeople, u))
+    }
+    
+    ptest1 <- rep(ptest, times = n)
+    
+    y.testall <- c()
+    for(testcount in 1:length(ptest1)){
+      
+      y.testall[testcount] <- rbinom(1,1,ptest1[testcount])
+      
+    }
+    
+    ubar.test <- rowMeans(new.data[,9:lastcolumn])
+    all.utility <- new.data[9:lastcolumn]
+    
+    
+    #y <- append(y.x, y.z)%>%
+    #append(y.q)%>%
+    #append(y.r)
+    
+    #ytest <- append(as.factor(y.x), as.factor(y.z))%>%
+    #append(as.factor(y.q))%>%
+    #append(as.factor(y.r))
+    
+    
+    # etatest <- eta_fun(x.test, z.test, q.test, r.test)
+    # ptest <- exp(etatest)/(1 + exp(etatest))
+    # ytest <- factor(rbinom(162, 1, ptest))
+    # 
+    
+    
+    ubar_fun <- function(a, b, c, d) apply(cbind(a, b, c, d), 1, mean)    
+    S_fun <- function(a, b, c, d) apply(cbind(a, b, c, d), 1, sd)    
+    ubar <- ubar.normal
+    
+    UBAR_repeat <- rep(ubar, times = n)
+    
+    S <- c()
+    
+    S <- rowSds(doptimaldesign[,2:peopleplus1])
+    
+    S_repeat <- rep(S, times = n)
+    
+    ubartest <- c()
+    ubartest <- ubar.test
+    
+    Stest <- c()
+    Stest <- rowSds(as.matrix(new.data[,9:lastcolumn]))
+    
+    ubartest_repeat <- rep(ubartest, times = n)
+    stest_repeat <- rep(Stest, times = n)
+    
+    
+    cGLM1 <- constGLM1multiple(X = cbind(UBAR_repeat, S_repeat), 
+                               y = y, Xtest = cbind(ubartest_repeat, stest_repeat))
+    
+    y.predicted <- c()
+    
+    for(predictedcount in 1:length(cGLM1[[2]])){
+      
+      y.predicted[predictedcount] <- rbinom(1,1,cGLM1[[2]][predictedcount])
+    }
+    
+    auc.value[m] <- auc(y.testall, y.predicted)
+    id.max[[m]] <- which.max(cGLM1[[2]])
+    max.groupwelfare[m] <- which.max(ptest1)
+    pars.list[[m]] <- cGLM1[[1]]
+    prob[[m]] <- cGLM1[[2]]
+    corscglm[m] <- cor(cGLM1[[2]], ptest1)
+    plot(cGLM1[[2]], ptest1, xlim = c(0, 1), ylim = c(0, 1))
+    print(corscglm[m])
+  }  
+  
+  output <- list(id.max, max.groupwelfare, pars.list, prob, corscglm, auc.value)
+  
+  return(output)
+}
+
+
+kemeny.test <- cbind(x.normalizedtest[[1]], x.normalizedtest[[2]], x.normalizedtest[[3]], x.normalizedtest[[4]], x.normalizedtest[[5]], x.normalizedtest[[6]], x.normalizedtest[[7]], x.normalizedtest[[8]], x.normalizedtest[[9]], x.normalizedtest[[10]])
+
+View(kemeny.test)
+
+kemeny.eta <- exp(kemeny.test)/(1+exp(kemeny.test))
+
+nash.social.wefare <- log(kemeny.eta)
+
+kemeny.testT <- t(kemeny.test)
+kemeny.testT 
+
+ranked.kemeny <- rbind(rank(kemeny.testT[1,]), rank(kemeny.testT[2,]), rank(kemeny.testT[3,]), rank(kemeny.testT[4,]), rank(kemeny.testT[5,]),
+                       rank(kemeny.testT[6,]), rank(kemeny.testT[7,]), rank(kemeny.testT[8,]), rank(kemeny.testT[9,]), rank(kemeny.testT[10,]))
+
+kemenyd(ranked.kemeny)
+
+EMCons(ranked.kemeny)
