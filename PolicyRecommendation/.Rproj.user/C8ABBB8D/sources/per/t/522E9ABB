@@ -1,0 +1,23 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1642354658618.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "504|80|512|0|\n544|49|587|0|\n591|44|618|0|\n805|43|920|0|\n922|42|952|0|\n955|44|1070|0|\n994|18|1064|2|\n1072|43|1106|0|\n",
+    "hash" : "4087163374",
+    "id" : "522E9ABB",
+    "lastKnownWriteTime" : 1642439287,
+    "last_content_update" : 1642439287416,
+    "path" : "~/CADS/PolicyRecommendation/PolicyRecommendation/Code/Appendix.R",
+    "project_path" : "Code/Appendix.R",
+    "properties" : {
+        "cursorPosition" : "739,6",
+        "scrollLine" : "716",
+        "tempName" : "Untitled1"
+    },
+    "relative_order" : 13,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

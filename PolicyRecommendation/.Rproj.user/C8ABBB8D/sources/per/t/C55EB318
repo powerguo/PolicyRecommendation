@@ -1,0 +1,22 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1641830756189.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "1771105510",
+    "id" : "C55EB318",
+    "lastKnownWriteTime" : 1641830769,
+    "last_content_update" : 1641830769932,
+    "path" : "~/CADS/PolicyRecommendation/PolicyRecommendation/ShinyApps/Survey/app.R",
+    "project_path" : "ShinyApps/Survey/app.R",
+    "properties" : {
+        "cursorPosition" : "310,114",
+        "scrollLine" : "0"
+    },
+    "relative_order" : 14,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

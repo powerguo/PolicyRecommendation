@@ -1,0 +1,22 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1642406272160.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "410|75|468|0|\n470|80|478|0|\n662|50|785|0|\n924|45|1056|0|\n1109|43|1222|0|\n1341|43|1432|0|\n1442|48|1518|0|\n1527|42|1554|0|\n1575|44|1602|0|\n1621|46|1649|0|\n1668|42|1698|0|\n1714|43|1748|0|\n",
+    "hash" : "4259182042",
+    "id" : "28EFFFC0",
+    "lastKnownWriteTime" : 1642406832,
+    "last_content_update" : 1642437742085,
+    "path" : "~/CADS/Project2/DCE/Simulation.R",
+    "project_path" : null,
+    "properties" : {
+        "cursorPosition" : "1752,0",
+        "scrollLine" : "1704"
+    },
+    "relative_order" : 21,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

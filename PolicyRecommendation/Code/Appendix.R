@@ -539,11 +539,22 @@ group.utility <- group.utility%>%
   mutate(group.score = (0.25*p1.utility + 0.25*p2.utility + 0.25 * p3.utility + 0.25 * p4.utility))%>%
   arrange(desc(group.score))
 
-#Weighted sum model - randomly selecting t pairs of alternatives for pairwise comparison
-group.recommendation.random <- function(t){
+people.utility <- group.utility[, 9:12]
+
+#Weighted sum model - using doptimal approach with four individual utility vectors as variabels for the d-optimal experiment design
+group.recommendation.doptimalonly <- function(t){
   
-  new.data <- group.utility[c(1, sample(2:162, 14)),]
-  new.data <- new.data%>%
+  
+  new.data <- group.utility
+  optimal.design.matrix <- as.matrix(group.utility[8:12])
+  
+  doptimaldesign <- Dopt.design(t, data = optimal.design.matrix, formula = ~p1.utility + p2.utility + p3.utility + p4.utility)
+  
+  id.optimal <- doptimaldesign$id
+  
+  optimal.data <- subset(group.utility, id %in% id.optimal)
+  
+  new.data <- optimal.data%>%
     mutate(p1.vote = exp(p1.utility)/(1+exp(p1.utility)))%>%
     mutate(p2.vote = exp(p2.utility)/(1+exp(p2.utility)))%>%
     mutate(p3.vote = exp(p3.utility)/(1+exp(p3.utility)))%>%
@@ -554,104 +565,48 @@ group.recommendation.random <- function(t){
     mutate(p4.choice = as.numeric(rbinom(n(), 1, p4.vote)))
   
   
-  u.diagnostic <- c()
-  u.ranking <- c()
-  u.id <- c()
+  outcome.choice <- as.matrix(new.data[,c("p1.choice", "p2.choice", "p3.choice", "p4.choice")])
   
-  all.utility <- c()
-  all.models <- c()
-  all.covmat <- c()
+  o.choice <- as.data.frame(outcome.choice)%>%
+    mutate(yes = p1.choice + p2.choice + p3.choice + p4.choice)%>%
+    mutate(no = 4 - yes)%>%
+    dplyr::select(yes, no)
   
-  for (j in 2:t){
-    
-    id.chosen <- new.data$id
-    
-    outcome.choice <- as.matrix(new.data[,c("p1.choice", "p2.choice", "p3.choice", "p4.choice")])
-    
-    o.choice <- as.data.frame(outcome.choice)%>%
-      mutate(yes = p1.choice + p2.choice + p3.choice + p4.choice)%>%
-      mutate(no = 4 - yes)%>%
-      dplyr::select(yes, no)
-    
-    o.choice <- as.matrix(o.choice)
-    
-    p1.ut <- group.utility$p1.utility
-    p2.ut <- group.utility$p2.utility
-    p3.ut <- group.utility$p3.utility
-    p4.ut <- group.utility$p4.utility
-    
-    m1.model <- stan_glm(formula = o.choice ~ 1 + (p1.utility) + (p2.utility) + (p3.utility) + (p4.utility), data = new.data, family = binomial(), 
-                         prior = normal())
-    
-    all.models[[j]] <- m1.model$coefficients
-    all.covmat[[j]] <- m1.model$covmat
-    
-    new.alt.id <- sample(1:162, 1)
-    new.alt <- group.utility%>%
-      dplyr::filter(id == new.alt.id)
-    
-    u.id[j] <- new.alt.id
-    u.diagnostic[j] <- new.ranking$new.utility[1]
-    u.ranking[j] <- which(new.ranking$id == new.alt.id)
-    
-    
-    new.alter <- new.alt%>%
-      mutate(p1.vote = exp(p1.utility)/(1+exp(p1.utility)))%>%
-      mutate(p2.vote = exp(p2.utility)/(1+exp(p2.utility)))%>%
-      mutate(p3.vote = exp(p3.utility)/(1+exp(p3.utility)))%>%
-      mutate(p4.vote = exp(p4.utility)/(1+exp(p4.utility)))%>%
-      mutate(p1.choice = as.numeric(rbinom(n(), 1, p1.vote)))%>%
-      mutate(p2.choice = as.numeric(rbinom(n(), 1, p2.vote)))%>%
-      mutate(p3.choice = as.numeric(rbinom(n(), 1, p3.vote)))%>%
-      mutate(p4.choice = as.numeric(rbinom(n(), 1, p4.vote)))
-    
-    new.data <- rbind(new.data, new.alter)
-    
-    iteration.vector <- rep(j, 162)
-    
-    diag.util <- cbind(new.utility, iteration.vector)
-    
-    if(j == 2){
-      
-      all.utility <- diag.util
-      
-    }
-    else{
-      
-      all.utility <- rbind(all.utility, diag.util)
-      
-    }
-    
-    
-  }
+  o.choice <- as.matrix(o.choice)
+  
+  m1.model <- stan_glm(formula = o.choice ~ 1 + (p1.utility) + (p2.utility) + (p3.utility) + (p4.utility), data = new.data, family = binomial(), 
+                       prior = normal())
+  
+  all.models <- m1.model$coefficients
+  all.covmat <- m1.model$covmat
   
   
-  my.list <- list(new.data, all.models, all.covmat, counter, id.chosen, new.utility, u.id, u.ranking, u.diagnostic, all.utility)
+  my.list <- list(new.data, all.models, all.covmat, m1.model)
   
   return(my.list)
   
-  
 }
 
-#Random group selection testing function, specify number of runs and number of t pairs
-random.group.search <- function(nruns, t){
+#Helper function in order to simulate nruns of doptimal search algorithms with t pairwise comparisons
+
+doptimal.group.search <- function(nruns, t){
   
   correlation <- c()
   regret <- c()
   
   for(i in 1:nruns){
     
-    random.search <- group.recommendation.random(t)
+    random.search <- group.recommendation.doptimalonly(t)
     
-    random.ranking <- as.matrix(people.utility)%*%as.matrix(random.search[2][[1]][[15]][2:5])
+    random.ranking <- as.matrix(people.utility)%*%as.matrix(random.search[2][[1]][2:5])
     
     correlation[i] <- cor(random.ranking, group.utility$group.score)
     
     print(correlation)
     
     group.utility1 <- group.utility%>%
-      mutate(new.score = random.search[2][[1]][[15]][2]*p1.utility + random.search[2][[1]][[15]][3]*p2.utility + random.search[2][[1]][[15]][4] * p3.utility 
-             + random.search[2][[1]][[15]][5] * p4.utility)%>%
+      mutate(new.score = random.search[2][[1]][2]*p1.utility + random.search[2][[1]][3]*p2.utility + random.search[2][[1]][4] * p3.utility 
+             + random.search[2][[1]][5] * p4.utility)%>%
       arrange(desc(new.score))
     
     regret[i] <- group.utility$group.score[1] - group.utility1$group.score[1]
@@ -663,26 +618,11 @@ random.group.search <- function(nruns, t){
   return(mylist)
 }
 
-#Running the random pairwise selection algorithm 
-test.random <- random.group.search(5, 15)
-test.random2 <- random.group.search(10, 15)
-test.random3 <- random.group.search(10, 15)
-test.random4 <- random.group.search(10, 15)
-test.random5 <- random.group.search(10, 15)
-test.random6 <- random.group.search(10, 15)
-test.random7 <- random.group.search(10, 15)
-test.random8 <- random.group.search(15, 15)
 
-random.correlation <- list.append(test.random[[1]], test.random2[[1]], test.random3[[1]], test.random4[[1]], test.random5[[1]], test.random6[[1]], test.random7[[1]], test.random8[[1]])
+test.doptimal2 <- doptimal.group.search(20, 15)
 
-mean(random.correlation)
-var(random.correlation)
 
-random.regret <- list.append(test.random[[2]], test.random2[[2]], test.random3[[2]], test.random4[[2]], test.random5[[2]], test.random6[[2]], test.random7[[2]], test.random8[[2]])
-
-mean(random.regret)
-var(random.regret)
-
+doptimal.correlation <- list.append(test.doptimal2[[1]])
 
 #Weighted sum model - using stanglm to find all 15 group pairwise comparisons using a greedy approach
 group.recommendation <- function(t){
@@ -817,14 +757,61 @@ group.recommendation <- function(t){
   
 }
 
-#Weighted sum model - using doptimal approach with four individual utility vectors as variabels for the d-optimal experiment design
-group.recommendation.doptimalonly <- function(t){
+#UCB Group helper function
+aggressive.group.search <- function(nruns, t){
   
+  correlation <- c()
+  regret <- c()
+  
+  for(i in 1:nruns){
+    
+    random.search <- group.recommendation(t)
+    
+    random.ranking <- as.matrix(people.utility)%*%as.matrix(random.search[2][[1]][[15]][2:5])
+    
+    correlation[i] <- cor(random.ranking, group.utility$group.score)
+    
+    print(correlation)
+    
+    group.utility1 <- group.utility%>%
+      mutate(new.score = random.search[2][[1]][[15]][2]*p1.utility + random.search[2][[1]][[15]][3]*p2.utility + random.search[2][[1]][[15]][4] * p3.utility 
+             + random.search[2][[1]][[15]][5] * p4.utility)%>%
+      arrange(desc(new.score))
+    
+    regret[i] <- group.utility$group.score[1] - group.utility1$group.score[1]
+    print(regret)
+  }
+  
+  mylist <- list(correlation, regret)
+  
+  return(mylist)  
+  
+}
+
+
+ntest.upperconfidence4 <- aggressive.group.search(20, 15)
+
+upperconfidence.correlation <- list.append(ntest.upperconfidence4[[1]])
+
+mean(upperconfidence.correlation)
+var(upperconfidence.correlation)
+
+upperconfidence.regret <- list.append(ntest.upperconfidence4[[2]])
+
+mean(upperconfidence.regret)
+var(upperconfidence.regret)
+
+#Hybrid approach with 5 pairs selected using UCB
+
+group.recommendation.hybrid <- function(t){
+  
+  all.models <- c()
+  all.covmat <- c()
   
   new.data <- group.utility
   optimal.design.matrix <- as.matrix(group.utility[8:12])
   
-  doptimaldesign <- Dopt.design(t, data = optimal.design.matrix, formula = ~p1.utility + p2.utility + p3.utility + p4.utility)
+  doptimaldesign <- Dopt.design(t-5, data = optimal.design.matrix, formula = ~p1.utility + p2.utility + p3.utility + p4.utility)
   
   id.optimal <- doptimaldesign$id
   
@@ -853,45 +840,283 @@ group.recommendation.doptimalonly <- function(t){
   m1.model <- stan_glm(formula = o.choice ~ 1 + (p1.utility) + (p2.utility) + (p3.utility) + (p4.utility), data = new.data, family = binomial(), 
                        prior = normal())
   
-  all.models[[j]] <- m1.model$coefficients
-  all.covmat[[j]] <- m1.model$covmat
   
   
-  my.list <- list(new.data, model.coefficients, model.fitted, m1.model)
+  for (j in 11:t){
+    
+    u.diagnostic <- c()
+    u.ranking <- c()
+    u.id <- c()
+    
+    all.utility <- c()
+    all.models <- c()
+    
+    id.chosen <- new.data$id
+    
+    outcome.choice <- as.matrix(new.data[,c("p1.choice", "p2.choice", "p3.choice", "p4.choice")])
+    
+    o.choice <- as.data.frame(outcome.choice)%>%
+      mutate(yes = p1.choice + p2.choice + p3.choice + p4.choice)%>%
+      mutate(no = 4 - yes)%>%
+      dplyr::select(yes, no)
+    
+    o.choice <- as.matrix(o.choice)
+    
+    p1.ut <- group.utility$p1.utility
+    p2.ut <- group.utility$p2.utility
+    p3.ut <- group.utility$p3.utility
+    p4.ut <- group.utility$p4.utility
+    
+    m1.model <- stan_glm(formula = o.choice ~ 1 + (p1.utility) + (p2.utility) + (p3.utility) + (p4.utility), data = new.data, family = binomial(), 
+                         prior = normal())
+    
+    var.model <- diag(m1.model$covmat)
+    
+    var.left <- p1.ut^2*var.model[2]+p2.ut^2*var.model[3] + p3.ut^2 * var.model[4] + p4.ut^2 * var.model[5]
+    
+    var.right <- p1.ut*p2.ut*m1.model$covmat[2, 3] + p1.ut*p3.ut*m1.model$covmat[2, 4] + p1.ut * p4.ut * m1.model$covmat[2, 5] +
+      p2.ut*p3.ut*m1.model$covmat[3, 4] + p2.ut*p4.ut*m1.model$covmat[3, 5] + p3.ut*p4.ut * m1.model$covmat[4, 5]
+    
+    var.total <- var.left + var.right
+    
+    people.utility <- group.utility[, 9:12]
+    
+    mean.total <- as.matrix(people.utility)%*%m1.model$coefficients[2:5]
+    
+    beta.init <- 2* log((4*j*pi^2)/(6))
+    
+    new.utility <- as.data.frame(cbind(group.utility, var.total, mean.total))%>%
+      mutate(new.utility = mean.total + sqrt(beta.init)*sqrt(var.total))
+    
+    
+    max.utility.row <- which.max(new.utility$new.utility)
+    
+    new.ranking <- new.utility%>%
+      arrange(desc(new.utility))
+    
+    new.alt.id <- new.ranking$id[1]
+    new.alt <- group.utility%>%
+      dplyr::filter(id == new.alt.id)
+    
+    
+    new.alter <- new.alt%>%
+      mutate(p1.vote = exp(p1.utility)/(1+exp(p1.utility)))%>%
+      mutate(p2.vote = exp(p2.utility)/(1+exp(p2.utility)))%>%
+      mutate(p3.vote = exp(p3.utility)/(1+exp(p3.utility)))%>%
+      mutate(p4.vote = exp(p4.utility)/(1+exp(p4.utility)))%>%
+      mutate(p1.choice = as.numeric(rbinom(n(), 1, p1.vote)))%>%
+      mutate(p2.choice = as.numeric(rbinom(n(), 1, p2.vote)))%>%
+      mutate(p3.choice = as.numeric(rbinom(n(), 1, p3.vote)))%>%
+      mutate(p4.choice = as.numeric(rbinom(n(), 1, p4.vote)))
+    
+    new.data <- rbind(new.data, new.alter)
+    
+    
+  }
+  
+  my.list <- list(new.data, m1.model$coefficients)
   
   return(my.list)
   
 }
 
+hybrid.group.search <- function(nruns, t){
+  
+  correlation <- c()
+  regret <- c()
+  
+  for(i in 1:nruns){
+    
+    random.search <- group.recommendation.hybrid(t)
+    
+    random.ranking <- as.matrix(people.utility)%*%as.matrix(random.search[[2]][2:5])
+    
+    correlation[i] <- cor(random.ranking, group.utility$group.score)
+    
+    print(correlation)
+    
+    group.utility1 <- group.utility%>%
+      mutate(new.score = random.search[[2]][2]*p1.utility + random.search[[2]][3]*p2.utility + random.search[[2]][4] * p3.utility 
+             + random.search[[2]][5] * p4.utility)%>%
+      arrange(desc(new.score))
+    
+    regret[i] <- group.utility$group.score[1] - group.utility1$group.score[1]
+    print(regret)
+  }
+  
+  
+  
+  mylist <- list(correlation, regret)
+  
+  return(mylist)
+  
+}
 
-test.random <- random.group.search(5, 15)
-test.random2 <- random.group.search(10, 15)
-test.random3 <- random.group.search(10,15)
-test.random4 <- random.group.search(10, 15)
-test.random5 <- random.group.search(10, 15)
-test.random6 <- random.group.search(10, 15)
-test.random7 <- random.group.search(10, 15)
-test.random8 <- random.group.search(15, 15)
+#Hybrid Approach with 2 UCB pairs
+group.recommendation.hybrid2 <- function(t){
+  
+  all.models <- c()
+  all.covmat <- c()
+  
+  new.data <- group.utility
+  optimal.design.matrix <- as.matrix(group.utility[8:12])
+  
+  doptimaldesign <- Dopt.design(t-2, data = optimal.design.matrix, formula = ~p1.utility + p2.utility + p3.utility + p4.utility)
+  
+  id.optimal <- doptimaldesign$id
+  
+  optimal.data <- subset(group.utility, id %in% id.optimal)
+  
+  new.data <- optimal.data%>%
+    mutate(p1.vote = exp(p1.utility)/(1+exp(p1.utility)))%>%
+    mutate(p2.vote = exp(p2.utility)/(1+exp(p2.utility)))%>%
+    mutate(p3.vote = exp(p3.utility)/(1+exp(p3.utility)))%>%
+    mutate(p4.vote = exp(p4.utility)/(1+exp(p4.utility)))%>%
+    mutate(p1.choice = as.numeric(rbinom(n(), 1, p1.vote)))%>%
+    mutate(p2.choice = as.numeric(rbinom(n(), 1, p2.vote)))%>%
+    mutate(p3.choice = as.numeric(rbinom(n(), 1, p3.vote)))%>%
+    mutate(p4.choice = as.numeric(rbinom(n(), 1, p4.vote)))
+  
+  
+  outcome.choice <- as.matrix(new.data[,c("p1.choice", "p2.choice", "p3.choice", "p4.choice")])
+  
+  o.choice <- as.data.frame(outcome.choice)%>%
+    mutate(yes = p1.choice + p2.choice + p3.choice + p4.choice)%>%
+    mutate(no = 4 - yes)%>%
+    dplyr::select(yes, no)
+  
+  o.choice <- as.matrix(o.choice)
+  
+  m1.model <- stan_glm(formula = o.choice ~ 1 + (p1.utility) + (p2.utility) + (p3.utility) + (p4.utility), data = new.data, family = binomial(), 
+                       prior = normal())
+  
+  
+  
+  for (j in 14:t){
+    
+    u.diagnostic <- c()
+    u.ranking <- c()
+    u.id <- c()
+    
+    all.utility <- c()
+    all.models <- c()
+    
+    id.chosen <- new.data$id
+    
+    outcome.choice <- as.matrix(new.data[,c("p1.choice", "p2.choice", "p3.choice", "p4.choice")])
+    
+    o.choice <- as.data.frame(outcome.choice)%>%
+      mutate(yes = p1.choice + p2.choice + p3.choice + p4.choice)%>%
+      mutate(no = 4 - yes)%>%
+      dplyr::select(yes, no)
+    
+    o.choice <- as.matrix(o.choice)
+    
+    p1.ut <- group.utility$p1.utility
+    p2.ut <- group.utility$p2.utility
+    p3.ut <- group.utility$p3.utility
+    p4.ut <- group.utility$p4.utility
+    
+    m1.model <- stan_glm(formula = o.choice ~ 1 + (p1.utility) + (p2.utility) + (p3.utility) + (p4.utility), data = new.data, family = binomial(), 
+                         prior = normal())
+    
+    var.model <- diag(m1.model$covmat)
+    
+    var.left <- p1.ut^2*var.model[2]+p2.ut^2*var.model[3] + p3.ut^2 * var.model[4] + p4.ut^2 * var.model[5]
+    
+    var.right <- p1.ut*p2.ut*m1.model$covmat[2, 3] + p1.ut*p3.ut*m1.model$covmat[2, 4] + p1.ut * p4.ut * m1.model$covmat[2, 5] +
+      p2.ut*p3.ut*m1.model$covmat[3, 4] + p2.ut*p4.ut*m1.model$covmat[3, 5] + p3.ut*p4.ut * m1.model$covmat[4, 5]
+    
+    var.total <- var.left + var.right
+    
+    people.utility <- group.utility[, 9:12]
+    
+    mean.total <- as.matrix(people.utility)%*%m1.model$coefficients[2:5]
+    
+    beta.init <- 2* log((4*j*pi^2)/(6))
+    
+    new.utility <- as.data.frame(cbind(group.utility, var.total, mean.total))%>%
+      mutate(new.utility = mean.total + sqrt(beta.init)*sqrt(var.total))
+    
+    
+    max.utility.row <- which.max(new.utility$new.utility)
+    
+    new.ranking <- new.utility%>%
+      arrange(desc(new.utility))
+    
+    new.alt.id <- new.ranking$id[1]
+    new.alt <- group.utility%>%
+      dplyr::filter(id == new.alt.id)
+    
+    
+    new.alter <- new.alt%>%
+      mutate(p1.vote = exp(p1.utility)/(1+exp(p1.utility)))%>%
+      mutate(p2.vote = exp(p2.utility)/(1+exp(p2.utility)))%>%
+      mutate(p3.vote = exp(p3.utility)/(1+exp(p3.utility)))%>%
+      mutate(p4.vote = exp(p4.utility)/(1+exp(p4.utility)))%>%
+      mutate(p1.choice = as.numeric(rbinom(n(), 1, p1.vote)))%>%
+      mutate(p2.choice = as.numeric(rbinom(n(), 1, p2.vote)))%>%
+      mutate(p3.choice = as.numeric(rbinom(n(), 1, p3.vote)))%>%
+      mutate(p4.choice = as.numeric(rbinom(n(), 1, p4.vote)))
+    
+    new.data <- rbind(new.data, new.alter)
+    
+    
+  }
+  
+  my.list <- list(new.data, m1.model$coefficients)
+  
+  return(my.list)
+  
+}
 
-random.correlation <- list.append(test.random[[1]], test.random2[[1]], test.random3[[1]], test.random4[[1]], test.random5[[1]], test.random6[[1]], test.random7[[1]], test.random8[[1]])
+hybrid.group.search2 <- function(nruns, t){
+  
+  correlation <- c()
+  regret <- c()
+  
+  data.new <- c()
+  
+  for(i in 1:nruns){
+    
+    random.search <- group.recommendation.hybrid2(t)
+    
+    random.ranking <- as.matrix(people.utility)%*%as.matrix(random.search[[2]][2:5])
+    
+    correlation[i] <- cor(random.ranking, group.utility$group.score)
+    
+    data.new[[i]] <- random.search[[1]]
+    
+    print(correlation)
+    
+    group.utility1 <- group.utility%>%
+      mutate(new.score = random.search[[2]][2]*p1.utility + random.search[[2]][3]*p2.utility + random.search[[2]][4] * p3.utility 
+             + random.search[[2]][5] * p4.utility)%>%
+      arrange(desc(new.score))
+    
+    regret[i] <- group.utility$group.score[1] - group.utility1$group.score[1]
+    print(regret)
+  }
+  
+  
+  
+  mylist <- list(correlation, regret, data.new)
+  
+  return(mylist)
+  
+}
 
-mean.correlation <- cbind(mean(random.correlation), mean(doptimal.correlation), mean(upperconfidence.correlation), mean(hybrid.correlation), mean(test.hybrid2.1[[1]]))
-sd.correlation <- cbind(sd(random.correlation), sd(doptimal.correlation), sd(upperconfidence.correlation), sd(hybrid.correlation), sd(test.hybrid2.1[[1]]))
+test.hybrid <- hybrid.group.search(20, 15)
 
-boxplot(random.correlation, doptimal.correlation, upperconfidence.correlation)
+hybrid.correlation <- list.append(test.hybrid[[1]])
 
-mean.regret <- cbind(mean(random.regret), mean(doptimal.regret), mean(upperconfidence.regret), mean(hybrid.regret), mean(test.hybrid2.1[[2]]))
-sd.regret <- cbind(sd(random.regret), sd(doptimal.regret), sd(upperconfidence.regret), sd(hybrid.regret))
+test.hybrid2.2 <- hybrid.group.search2(20, 15)
 
-boxplot(random.correlation, doptimal.correlation, upperconfidence.correlation, hybrid.correlation, test.hybrid2.1[[1]],
+#Generating Figure 4 in Appendix F for all simulation results
+boxplot(doptimal.correlation, upperconfidence.correlation, hybrid.correlation, test.hybrid2.2[[1]],
         main = "Correlation of Recommendation Algorithm",
-        names = c("Random", "Information Maximation", "UCB", "Hybrid (5)", "Hybrid (2)"),
+        names = c("Information Maximation", "UCB", "Hybrid (5)", "Hybrid (2)"),
         xlab = "Algorithms",
         ylab = "Correlation with group truth")
 
 
-boxplot(random.regret, doptimal.regret, upperconfidence.regret, hybrid.regret, test.hybrid2.1[[2]],
-        main = "Regret of Recommendation Algorithm",
-        names = c("Random", "Information Maximation", "UCB", "Hybrid (5)", "Hybrid (2)"),
-        xlab = "Algorithms",
-        ylab = "Regret with group truth")

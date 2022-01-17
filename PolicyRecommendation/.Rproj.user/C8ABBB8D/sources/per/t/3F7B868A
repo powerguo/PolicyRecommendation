@@ -1,0 +1,29 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1642356052122.000,
+    "dirty" : false,
+    "encoding" : "",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "3F7B868A",
+    "lastKnownWriteTime" : 3180141808686473843,
+    "last_content_update" : 1642356052122,
+    "path" : null,
+    "project_path" : null,
+    "properties" : {
+        "cacheKey" : "FFA8814D",
+        "caption" : "T2.kvalue",
+        "contentUrl" : "grid_resource/gridviewer.html?env=&obj=T2.kvalue&cache_key=FFA8814D",
+        "displayedObservations" : 27,
+        "environment" : "",
+        "object" : "T2.kvalue",
+        "preview" : 0,
+        "totalObservations" : 27,
+        "variables" : 2
+    },
+    "relative_order" : 15,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_dataframe"
+}

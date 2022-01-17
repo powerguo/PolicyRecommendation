@@ -1,0 +1,1233 @@
+library(dplyr)
+library(tidyr)
+library(googleAuthR)
+library(googledrive)
+library(googlesheets4)
+library(shinyjs)
+library(lubridate)
+library(rstanarm)
+library(mlogit)
+library(Hmisc)
+library(survival)
+library(DoE.base)
+library(DoE.wrapper)
+library(Metrics)
+library(mgcv)
+library(support.CEs)
+library(mlmRev)
+library(lme4)
+library(rlist)
+library(Matrix)
+library(matrixStats)
+library(pROC)
+library(purrr)
+library(magrittr)
+library(gargle)
+library(httr)
+library(readxl)
+library(fmsb)
+library(gridExtra)
+library(ggpubr)
+
+#Helper Functions
+create.col.nuc <- function(df, n){
+  varname <- paste0("nuc.power0", n)
+  mutate(df, !!varname := ifelse(nuc.power0 == n, 1,0))
+}
+
+create.col.ban <- function(df, n){
+  varname <- paste0("ban.fuel.explore0", n)
+  mutate(df, !!varname := ifelse(ban.fuel.explore0 == n, 1,0))
+}
+
+create.col.RFS <- function(df, n){
+  varname <- paste0("RFS0", n)
+  mutate(df, !!varname := ifelse(RFS0 == n, 1,0))
+}
+
+create.col.nuc1 <- function(df, n){
+  varname <- paste0("nuc.power1", n)
+  mutate(df, !!varname := ifelse(nuc.power1 == n, 1,0))
+}
+
+create.col.ban1 <- function(df, n){
+  varname <- paste0("ban.fuel.explore1", n)
+  mutate(df, !!varname := ifelse(ban.fuel.explore1 == n, 1,0))
+}
+
+create.col.RFS1 <- function(df, n){
+  varname <- paste0("RFS1", n)
+  mutate(df, !!varname := ifelse(RFS1 == n, 1,0))
+}
+
+#Read in participant voting results for those who participated in Stage 3
+
+indi.result.all <- c()
+
+for(i in 1:54){
+  
+  indi.result.all[[i]] <-read_excel(paste0("Data/Group Result/Voting Result", i, ".xlsx"), range = cell_rows(17:17), col_names = FALSE)
+  
+  
+}
+
+indi.group <- c()
+
+indi.extract <- function(x){
+  
+  p1 <- as.numeric(ifelse(x[1] == "Yes", 1, 0))
+  p2 <- as.numeric(ifelse(x[2] == "Yes", 1, 0))
+  p3 <- as.numeric(ifelse(x[3] == "Yes", 1, 0))
+  p4 <- as.numeric(ifelse(x[4] == "Yes", 1, 0))
+  
+  return(rbind(p1, p2, p3, p4))
+  
+}
+
+a <- indi.extract(indi.result.all[[1]])
+
+for(i in 1:54){
+  
+  indi.group1 <- indi.extract(indi.result.all[[i]])
+  indi.group <- rbind(indi.group, indi.group1)
+  
+}
+
+# Read in group results
+
+i = 54 #54 total groups
+
+vote.result <- c()
+vote.result.all <- c()
+
+#Read in Group results
+for(j in 1:54){
+  
+  vote.result[[j]] <- read_excel(paste0("Data/Group Result/Voting Result", j, ".xlsx"), range = cell_rows(17:17), col_names = FALSE)
+  
+  vote.result.all[[j]] <- read_excel(paste0("Data/Group Result/Voting Result", j, ".xlsx"), range = cell_rows(2:16), col_names = FALSE)
+  
+  
+}
+
+#Group Voting results
+group.consensus <- c()
+
+for(k in 1:54){
+  
+  group.consensus[k] <- ifelse(vote.result[[k]][1] == "Yes" & vote.result[[k]][2] == "Yes" & vote.result[[k]][3] == "Yes" & vote.result[[k]][4] == "Yes", 1, 0)
+  
+}
+
+group.consensus.indi <- rep(group.consensus, each = 4)
+
+#Estimated Utility Values for All Alternatives for each group
+
+prob.all <- c()
+
+for(l in 1:54){
+  
+  prob.all[[l]] <- read_excel(paste0("Data/Group Result/predictedprob", l, ".xlsx"), col_names = TRUE)
+  
+}
+
+#Keep track of which model the group used
+treat.vector <- c()
+
+for(m in 1:54){
+  
+  treat.vector[m] <- ifelse(colnames(prob.all[[m]][15]) == "predicted.probability", 1,0)
+  
+}
+
+#Keep track of alternatives offered to the groups during phase 1
+design.all <- c()
+
+for(i in 1:54){
+  
+  design.all[[i]] <- read_excel(paste0("Data/Group Result/Final Recommendation", j, ".xlsx"), sheet = 2, col_names = TRUE)
+  
+}
+
+#Bind group result with vector tracking which model each group was assigned to
+group.vector <- cbind(group.consensus, treat.vector)
+
+#Tracking Validation responses from each group
+validation.raw <- c()
+
+for(k in 1:54){
+  
+  validation.raw[[k]] <- read_excel(paste0("Data/Group Result/Voting Result", k, ".xlsx"), range = cell_rows(18:27), col_names = FALSE)
+  
+}
+
+#Filter groups assigned to weighted sum model
+T1 <- as.data.frame(group.vector)%>%
+  dplyr::filter(treat.vector == 0)
+
+#Filter groups assigned to mean variance model
+T2 <- as.data.frame(group.vector)%>%
+  dplyr::filter(treat.vector == 1)
+
+#Calcuate Validation Score for each team
+
+validation.score.team <- c()
+
+validation.calc <- function(x){
+  
+  result <- sum(rowSums(x == "Left"), na.rm = TRUE)
+  return(result)
+  
+}
+
+for(k in 1:54){
+  
+  validation.score.team[k] <- validation.calc(validation.raw[[k]])
+  
+}
+
+#Bind team validation scores with model assignment vector
+team.validation.result <- cbind(validation.score.team, treat.vector)
+
+#filter group validation result based on model
+#Groups assigned to weighted sum model
+T1.validation <- as.data.frame(team.validation.result)%>%
+  dplyr::filter(treat.vector==0)
+
+#Groups assigned to mean variance model
+T2.validation <- as.data.frame(team.validation.result)%>%
+  dplyr::filter(treat.vector == 1)
+
+#Permutation test values for group consensus and group validation scores. 
+#Results reported in Table 2 in manuscript
+
+permTS(T1$group.consensus, T2$group.consensus)
+
+permTS(T1.validation$validation.score.team, T2.validation$validation.score.team)
+
+#KS test and T test of group consensus and group validation scores. 
+#T values reported in Table 2 in manuscript
+ks.test(T1$group.consensus, T2$group.consensus)
+t.test(T1$group.consensus, T2$group.consensus)
+
+ks.test(T1.validation$validation.score.team, T2.validation$validation.score.team)
+t.test(T1.validation$validation.score.team, T2.validation$validation.score.team)
+
+#Read in individual cluster results
+
+clustered.indi <- read.csv("Data/Group Result/cluster_assignment_join.csv")%>%
+  arrange(Id)
+
+#Assign participant model indicator, 0 = weighted sum, 1 = mean variance
+treat.vector.total <- rep(treat.vector, each = 4)
+
+clustered.indi.treat <- cbind(clustered.indi, treat.vector.total)%>%
+  dplyr::select(-D1, -D2, -D3, -D4)
+
+#Filter participants based on model assigned
+#Weighted Sum participants
+coefs.all_0 <- clustered.indi.treat%>%
+  filter(treat.vector.total == 0)%>%
+  dplyr::select(-treat.vector.total, -X)
+
+#Mean Variance participants
+coefs.all_1 <- clustered.indi.treat%>%
+  filter(treat.vector.total == 1)%>%
+  dplyr::select(-treat.vector.total, -X)
+
+#Arranging dataframe into long form for ggplot
+coefs.all_0_gather <- gather(coefs.all_0, key = "Key", value = "Value", - assigned, -Id)%>%
+  mutate(Value = ifelse(Key == "CO2Price", Value *150, Value))%>%
+  mutate(treat = "Weighted Sum")
+
+coefs.all_1_gather <- gather(coefs.all_1, key = "Key", value = "Value", -assigned, - Id)%>%
+  mutate(Value = ifelse(Key == "CO2Price", Value *150, Value))%>%
+  mutate(treat = "Mean Variance")
+
+coef.all_gather <- rbind(coefs.all_0_gather, coefs.all_1_gather)
+
+#Create appropriate factor level for parameters
+coef.all_gather$Key <- factor(coef.all_gather$Key, levels = c('Intercept', 'Nuc1', 'Nuc2', 'CO2Price', 'BanFuel1', 'BanFuel2', 'RFS1', 'RFS2'))
+
+#Helper function for plot labelling
+variable_names_int <- list(
+  "Intercept" = "Status Quo",
+  "Nuc1" = "Increase Nuc",
+  "Nuc2" = "Decrease Nuc",
+  "CO2Price" = "$/ton CO2",
+  "BanFuel1" = "Tighter FF Regs",
+  "BanFuel2" = "Ban FF on PL",
+  "RFS1" = "2050 100% Clean Energy",
+  "RFS2" = "2035 100% Clean Energy"
+)
+
+variable_labeller_int <- function(variable, value){
+  
+  return(variable_names_int[value])
+  
+}
+
+#Generate cohen's d values for all cluster pairs for all parameters. 
+#Results reported in Table 1 of manuscript
+
+intercept_cohen <- coef.all_gather%>%
+  filter(Key == "Intercept")
+
+intercept_1 <- intercept_cohen%>%
+  filter(assigned == 1)
+
+intercept_2 <- intercept_cohen%>%
+  filter(assigned == 2)
+
+intercept_3 <- intercept_cohen%>%
+  filter(assigned == 3)
+
+intercept_4 <- intercept_cohen%>%
+  filter(assigned == 4)
+
+mean_intercept_12 <- mean(intercept_1$Value) - mean(intercept_2$Value)
+
+cohen_intercept_12 <- mean_intercept_12/(sqrt((sd(intercept_1$Value)^2 + sd(intercept_2$Value)^2)/2))
+
+mean_intercept_13 <- mean(intercept_1$Value) - mean(intercept_3$Value)
+
+cohen_intercept_13 <- mean_intercept_13/(sqrt((sd(intercept_1$Value)^2 + sd(intercept_3$Value)^2)/2))
+
+mean_intercept_14 <- mean(intercept_1$Value) - mean(intercept_4$Value)
+
+cohen_intercept_14 <- mean_intercept_14/(sqrt((sd(intercept_1$Value)^2 + sd(intercept_4$Value)^2)/2))
+
+mean_intercept_23 <- mean(intercept_2$Value) - mean(intercept_3$Value)
+
+cohen_intercept_23 <- mean_intercept_23/(sqrt((sd(intercept_2$Value)^2 + sd(intercept_3$Value)^2)/2))
+
+mean_intercept_24 <- mean(intercept_2$Value) - mean(intercept_4$Value)
+
+cohen_intercept_24 <- mean_intercept_24/(sqrt((sd(intercept_2$Value)^2 + sd(intercept_4$Value)^2)/2))
+
+mean_intercept_34 <- mean(intercept_3$Value) - mean(intercept_4$Value)
+
+cohen_intercept_34 <- mean_intercept_34/(sqrt((sd(intercept_3$Value)^2 + sd(intercept_4$Value)^2)/2))
+
+nuc1_cohen <- coef.all_gather%>%
+  filter(Key == "Nuc1")
+
+nuc1_1 <- nuc1_cohen%>%
+  filter(assigned == 1)
+
+nuc1_2 <- nuc1_cohen%>%
+  filter(assigned == 2)
+
+nuc1_3 <- nuc1_cohen%>%
+  filter(assigned == 3)
+
+nuc1_4 <- nuc1_cohen%>%
+  filter(assigned == 4)
+
+mean_nuc1_12 <- mean(nuc1_1$Value) - mean(nuc1_2$Value)
+
+cohen_nuc1_12 <- mean_nuc1_12/(sqrt((sd(nuc1_1$Value)^2 + sd(nuc1_2$Value)^2)/2))
+
+mean_nuc1_13 <- mean(nuc1_1$Value) - mean(nuc1_3$Value)
+
+cohen_nuc1_13 <- mean_nuc1_13/(sqrt((sd(nuc1_1$Value)^2 + sd(nuc1_2$Value)^2)/2))
+
+mean_nuc1_14 <- mean(nuc1_1$Value) - mean(nuc1_4$Value)
+
+cohen_nuc1_14 <- mean_nuc1_14/(sqrt((sd(nuc1_1$Value)^2 + sd(nuc1_2$Value)^2)/2))
+
+mean_nuc1_23 <- mean(nuc1_2$Value) - mean(nuc1_3$Value)
+
+cohen_nuc1_23 <- mean_nuc1_23/(sqrt((sd(nuc1_1$Value)^2 + sd(nuc1_2$Value)^2)/2))
+
+mean_nuc1_24 <- mean(nuc1_2$Value) - mean(nuc1_4$Value)
+
+cohen_nuc1_24 <- mean_nuc1_24/(sqrt((sd(nuc1_1$Value)^2 + sd(nuc1_2$Value)^2)/2))
+
+mean_nuc1_34 <- mean(nuc1_3$Value) - mean(nuc1_4$Value)
+
+cohen_nuc1_34 <- mean_nuc1_34/(sqrt((sd(nuc1_1$Value)^2 + sd(nuc1_2$Value)^2)/2))
+
+nuc2_cohen <- coef.all_gather%>%
+  filter(Key == "Nuc2")
+
+nuc2_1 <- nuc2_cohen%>%
+  filter(assigned == 1)
+
+nuc2_2 <- nuc2_cohen%>%
+  filter(assigned == 2)
+
+nuc2_3 <- nuc2_cohen%>%
+  filter(assigned == 3)
+
+nuc2_4 <- nuc2_cohen%>%
+  filter(assigned == 4)
+
+mean_nuc2_12 <- mean(nuc2_1$Value) - mean(nuc2_2$Value)
+
+cohen_nuc2_12 <- mean_nuc2_12/(sqrt((sd(nuc2_1$Value)^2 + sd(nuc2_2$Value)^2)/2))
+
+mean_nuc2_13 <- mean(nuc2_1$Value) - mean(nuc2_3$Value)
+
+cohen_nuc2_13 <- mean_nuc2_13/(sqrt((sd(nuc2_1$Value)^2 + sd(nuc2_2$Value)^2)/2))
+
+mean_nuc2_14 <- mean(nuc2_1$Value) - mean(nuc2_4$Value)
+
+cohen_nuc2_14 <- mean_nuc2_14/(sqrt((sd(nuc2_1$Value)^2 + sd(nuc2_2$Value)^2)/2))
+
+mean_nuc2_23 <- mean(nuc2_2$Value) - mean(nuc2_3$Value)
+
+cohen_nuc2_23 <- mean_nuc2_23/(sqrt((sd(nuc2_1$Value)^2 + sd(nuc2_2$Value)^2)/2))
+
+mean_nuc2_24 <- mean(nuc2_2$Value) - mean(nuc2_4$Value)
+
+cohen_nuc2_24 <- mean_nuc2_24/(sqrt((sd(nuc2_1$Value)^2 + sd(nuc2_2$Value)^2)/2))
+
+mean_nuc2_34 <- mean(nuc2_3$Value) - mean(nuc2_4$Value)
+
+cohen_nuc2_34 <- mean_nuc2_34/(sqrt((sd(nuc2_1$Value)^2 + sd(nuc2_2$Value)^2)/2))
+
+CO2Price_cohen <- coef.all_gather%>%
+  filter(Key == "CO2Price")
+
+CO2Price_1 <- CO2Price_cohen%>%
+  filter(assigned == 1)
+
+CO2Price_2 <- CO2Price_cohen%>%
+  filter(assigned == 2)
+
+CO2Price_3 <- CO2Price_cohen%>%
+  filter(assigned == 3)
+
+CO2Price_4 <- CO2Price_cohen%>%
+  filter(assigned == 4)
+
+mean_CO2Price_12 <- mean(CO2Price_1$Value) - mean(CO2Price_2$Value)
+
+cohen_CO2Price_12 <- mean_CO2Price_12/(sqrt((sd(CO2Price_1$Value)^2 + sd(CO2Price_2$Value)^2)/2))
+
+mean_CO2Price_13 <- mean(CO2Price_1$Value) - mean(CO2Price_3$Value)
+
+cohen_CO2Price_13 <- mean_CO2Price_13/(sqrt((sd(CO2Price_1$Value)^2 + sd(CO2Price_2$Value)^2)/2))
+
+mean_CO2Price_14 <- mean(CO2Price_1$Value) - mean(CO2Price_4$Value)
+
+cohen_CO2Price_14 <- mean_CO2Price_14/(sqrt((sd(CO2Price_1$Value)^2 + sd(CO2Price_2$Value)^2)/2))
+
+mean_CO2Price_23 <- mean(CO2Price_2$Value) - mean(CO2Price_3$Value)
+
+cohen_CO2Price_23 <- mean_CO2Price_23/(sqrt((sd(CO2Price_1$Value)^2 + sd(CO2Price_2$Value)^2)/2))
+
+mean_CO2Price_24 <- mean(CO2Price_2$Value) - mean(CO2Price_4$Value)
+
+cohen_CO2Price_24 <- mean_CO2Price_24/(sqrt((sd(CO2Price_1$Value)^2 + sd(CO2Price_2$Value)^2)/2))
+
+mean_CO2Price_34 <- mean(CO2Price_3$Value) - mean(CO2Price_4$Value)
+
+cohen_CO2Price_34 <- mean_CO2Price_34/(sqrt((sd(CO2Price_1$Value)^2 + sd(CO2Price_2$Value)^2)/2))
+
+BanFuel1_cohen <- coef.all_gather%>%
+  filter(Key == "BanFuel1")
+
+BanFuel1_1 <- BanFuel1_cohen%>%
+  filter(assigned == 1)
+
+BanFuel1_2 <- BanFuel1_cohen%>%
+  filter(assigned == 2)
+
+BanFuel1_3 <- BanFuel1_cohen%>%
+  filter(assigned == 3)
+
+BanFuel1_4 <- BanFuel1_cohen%>%
+  filter(assigned == 4)
+
+mean_BanFuel1_12 <- mean(BanFuel1_1$Value) - mean(BanFuel1_2$Value)
+
+cohen_BanFuel1_12 <- mean_BanFuel1_12/(sqrt((sd(BanFuel1_1$Value)^2 + sd(BanFuel1_2$Value)^2)/2))
+
+mean_BanFuel1_13 <- mean(BanFuel1_1$Value) - mean(BanFuel1_3$Value)
+
+cohen_BanFuel1_13 <- mean_BanFuel1_13/(sqrt((sd(BanFuel1_1$Value)^2 + sd(BanFuel1_2$Value)^2)/2))
+
+mean_BanFuel1_14 <- mean(BanFuel1_1$Value) - mean(BanFuel1_4$Value)
+
+cohen_BanFuel1_14 <- mean_BanFuel1_14/(sqrt((sd(BanFuel1_1$Value)^2 + sd(BanFuel1_2$Value)^2)/2))
+
+mean_BanFuel1_23 <- mean(BanFuel1_2$Value) - mean(BanFuel1_3$Value)
+
+cohen_BanFuel1_23 <- mean_BanFuel1_23/(sqrt((sd(BanFuel1_1$Value)^2 + sd(BanFuel1_2$Value)^2)/2))
+
+mean_BanFuel1_24 <- mean(BanFuel1_2$Value) - mean(BanFuel1_4$Value)
+
+cohen_BanFuel1_24 <- mean_BanFuel1_24/(sqrt((sd(BanFuel1_1$Value)^2 + sd(BanFuel1_2$Value)^2)/2))
+
+mean_BanFuel1_34 <- mean(BanFuel1_3$Value) - mean(BanFuel1_4$Value)
+
+cohen_BanFuel1_34 <- mean_BanFuel1_34/(sqrt((sd(BanFuel1_1$Value)^2 + sd(BanFuel1_2$Value)^2)/2))
+
+BanFuel2_cohen <- coef.all_gather%>%
+  filter(Key == "BanFuel2")
+
+BanFuel2_1 <- BanFuel2_cohen%>%
+  filter(assigned == 1)
+
+BanFuel2_2 <- BanFuel2_cohen%>%
+  filter(assigned == 2)
+
+BanFuel2_3 <- BanFuel2_cohen%>%
+  filter(assigned == 3)
+
+BanFuel2_4 <- BanFuel2_cohen%>%
+  filter(assigned == 4)
+
+mean_BanFuel2_12 <- mean(BanFuel2_1$Value) - mean(BanFuel2_2$Value)
+
+cohen_BanFuel2_12 <- mean_BanFuel2_12/(sqrt((sd(BanFuel2_1$Value)^2 + sd(BanFuel2_2$Value)^2)/2))
+
+mean_BanFuel2_13 <- mean(BanFuel2_1$Value) - mean(BanFuel2_3$Value)
+
+cohen_BanFuel2_13 <- mean_BanFuel2_13/(sqrt((sd(BanFuel2_1$Value)^2 + sd(BanFuel2_2$Value)^2)/2))
+
+mean_BanFuel2_14 <- mean(BanFuel2_1$Value) - mean(BanFuel2_4$Value)
+
+cohen_BanFuel2_14 <- mean_BanFuel2_14/(sqrt((sd(BanFuel2_1$Value)^2 + sd(BanFuel2_2$Value)^2)/2))
+
+mean_BanFuel2_23 <- mean(BanFuel2_2$Value) - mean(BanFuel2_3$Value)
+
+cohen_BanFuel2_23 <- mean_BanFuel2_23/(sqrt((sd(BanFuel2_1$Value)^2 + sd(BanFuel2_2$Value)^2)/2))
+
+mean_BanFuel2_24 <- mean(BanFuel2_2$Value) - mean(BanFuel2_4$Value)
+
+cohen_BanFuel2_24 <- mean_BanFuel2_24/(sqrt((sd(BanFuel2_1$Value)^2 + sd(BanFuel2_2$Value)^2)/2))
+
+mean_BanFuel2_34 <- mean(BanFuel2_3$Value) - mean(BanFuel2_4$Value)
+
+cohen_BanFuel2_34 <- mean_BanFuel2_34/(sqrt((sd(BanFuel2_1$Value)^2 + sd(BanFuel2_2$Value)^2)/2))
+
+RFS1_cohen <- coef.all_gather%>%
+  filter(Key == "RFS1")
+
+RFS1_1 <- RFS1_cohen%>%
+  filter(assigned == 1)
+
+RFS1_2 <- RFS1_cohen%>%
+  filter(assigned == 2)
+
+RFS1_3 <- RFS1_cohen%>%
+  filter(assigned == 3)
+
+RFS1_4 <- RFS1_cohen%>%
+  filter(assigned == 4)
+
+mean_RFS1_12 <- mean(RFS1_1$Value) - mean(RFS1_2$Value)
+
+cohen_RFS1_12 <- mean_RFS1_12/(sqrt((sd(RFS1_1$Value)^2 + sd(RFS1_2$Value)^2)/2))
+
+mean_RFS1_13 <- mean(RFS1_1$Value) - mean(RFS1_3$Value)
+
+cohen_RFS1_13 <- mean_RFS1_13/(sqrt((sd(RFS1_1$Value)^2 + sd(RFS1_2$Value)^2)/2))
+
+mean_RFS1_14 <- mean(RFS1_1$Value) - mean(RFS1_4$Value)
+
+cohen_RFS1_14 <- mean_RFS1_14/(sqrt((sd(RFS1_1$Value)^2 + sd(RFS1_2$Value)^2)/2))
+
+mean_RFS1_23 <- mean(RFS1_2$Value) - mean(RFS1_3$Value)
+
+cohen_RFS1_23 <- mean_RFS1_23/(sqrt((sd(RFS1_1$Value)^2 + sd(RFS1_2$Value)^2)/2))
+
+mean_RFS1_24 <- mean(RFS1_2$Value) - mean(RFS1_4$Value)
+
+cohen_RFS1_24 <- mean_RFS1_24/(sqrt((sd(RFS1_1$Value)^2 + sd(RFS1_2$Value)^2)/2))
+
+mean_RFS1_34 <- mean(RFS1_3$Value) - mean(RFS1_4$Value)
+
+cohen_RFS1_34 <- mean_RFS1_34/(sqrt((sd(RFS1_1$Value)^2 + sd(RFS1_2$Value)^2)/2))
+
+RFS2_cohen <- coef.all_gather%>%
+  filter(Key == "RFS2")
+
+RFS2_1 <- RFS2_cohen%>%
+  filter(assigned == 1)
+
+RFS2_2 <- RFS2_cohen%>%
+  filter(assigned == 2)
+
+RFS2_3 <- RFS2_cohen%>%
+  filter(assigned == 3)
+
+RFS2_4 <- RFS2_cohen%>%
+  filter(assigned == 4)
+
+mean_RFS2_12 <- mean(RFS2_1$Value) - mean(RFS2_2$Value)
+
+cohen_RFS2_12 <- mean_RFS2_12/(sqrt((sd(RFS2_1$Value)^2 + sd(RFS2_2$Value)^2)/2))
+
+mean_RFS2_13 <- mean(RFS2_1$Value) - mean(RFS2_3$Value)
+
+cohen_RFS2_13 <- mean_RFS2_13/(sqrt((sd(RFS2_1$Value)^2 + sd(RFS2_2$Value)^2)/2))
+
+mean_RFS2_14 <- mean(RFS2_1$Value) - mean(RFS2_4$Value)
+
+cohen_RFS2_14 <- mean_RFS2_14/(sqrt((sd(RFS2_1$Value)^2 + sd(RFS2_2$Value)^2)/2))
+
+mean_RFS2_23 <- mean(RFS2_2$Value) - mean(RFS2_3$Value)
+
+cohen_RFS2_23 <- mean_RFS2_23/(sqrt((sd(RFS2_1$Value)^2 + sd(RFS2_2$Value)^2)/2))
+
+mean_RFS2_24 <- mean(RFS2_2$Value) - mean(RFS2_4$Value)
+
+cohen_RFS2_24 <- mean_RFS2_24/(sqrt((sd(RFS2_1$Value)^2 + sd(RFS2_2$Value)^2)/2))
+
+mean_RFS2_34 <- mean(RFS2_3$Value) - mean(RFS2_4$Value)
+
+cohen_RFS2_34 <- mean_RFS2_34/(sqrt((sd(RFS2_1$Value)^2 + sd(RFS2_2$Value)^2)/2))
+
+#All Values are tabulated into table 1
+
+
+#Figure 1 of Manuscript
+
+ggplot(data = coef.all_gather, aes(x = as.factor(assigned), y = Value))+
+  geom_boxplot(aes(color = as.factor(assigned)))+
+  geom_jitter(aes(color = as.factor(assigned)), alpha = 0.6, width = 0.2)+
+  facet_wrap(~Key, labeller = variable_labeller_int, ncol = 4)+
+  scale_color_discrete(name = "Cluster Assignment", labels = c("Indifferent", "Fast Decarbonization", "Against Fossil Fuel Exploration", "Against Status Quo"))+
+  xlab("Cluster Assignment")+
+  ylab("Coefficent Value")+
+  theme_bw()+
+  theme(axis.text = element_text(size = 12),
+        axis.title = element_text(size = 14, face = "bold"),
+        axis.text.x = element_text(angle = 60, hjust = 1),
+        strip.text = element_text(size = 14),
+        legend.text = element_text(size = 12),
+        legend.title = element_text(size = 14),
+        panel.border = element_rect(color = "black", fill = NA, size = 1))
+
+ggsave("Figures/figure1.png", width = 1500, height = 800, units = "px", dpi = 100)
+
+# Group Recommendations
+
+group.recommendations <- data.frame(matrix(NA, nrow  = 54, ncol = 4))
+
+for(i in 1:54){
+  
+  group.recommendations[i,] <- read_excel(paste0("Data/Group Result/Final Recommendation", i, ".xlsx"))
+  
+}
+
+names(group.recommendations) <- c("nuc.power0", "CO2Price0", "ban.fuel.explore0", "RFS0")
+
+group.recommendations_mutated <- group.recommendations%>%
+  mutate(nuc.power0 = ifelse(nuc.power0 == "Keep current nuclear power plants but do not build any new plants.", 0, ifelse(
+    nuc.power0 == "Keep current nuclear power plants and provide money to increase nuclear power by 14% over the next eight years.", 1, 2)
+  ))%>%
+  mutate(ban.fuel.explore0 = ifelse(ban.fuel.explore0 == "Unregulated access to federal lands and waters for fossil fuel exploration.", 0, ifelse(
+    ban.fuel.explore0 == "Tighter fracking regulation on public lands that increases storage safety standards and transparency of what chemicals are used.", 1, 2
+  )))%>%
+  mutate(RFS0 = ifelse(RFS0 == "Starting from 2021, reach 100% clean energy by 2100 with a yearly increase of 1.3% of clean energy in the grid.", 0, ifelse(
+    RFS0 == "Starting from 2021, reach 100% clean energy by 2050 with a yearly increase of 3.5% of clean energy in the grid.", 1, 2)))
+
+group.recommendations_mutated_1 <- group.recommendations_mutated%>%
+  create.col.nuc(1)%>%
+  create.col.nuc(2)%>%
+  create.col.ban(1)%>%
+  create.col.ban(2)%>%
+  create.col.RFS(1)%>%
+  create.col.RFS(2)
+
+#Find best policy for each individual
+
+counter <- 0
+indi.policy <- data.frame(matrix(ncol = 7, nrow = 216))
+
+for(i in 1:54){
+  
+  for(j in 1:4){
+    
+    counter <- counter + 1
+    print(counter)
+    rownumber <- which.max(unlist(prob.all[[i]][,8+j]))
+    indi.policy[counter,] <- prob.all[[i]][rownumber, 1:7]
+    
+  }
+  
+}
+
+#Renaming variable names
+
+indi.policy_mutated <- indi.policy%>%
+  mutate(nuc.power = ifelse(X1 == 1 & X2 == 0, "Keep current nuclear power plants and provide money to increase nuclear power by 14% over the next eight years.", 
+                            ifelse(X1 ==0 & X2 == 1, "Shut down nuclear power plants that are not making money, reducing nuclear power by 14-29% than today. Do not build nuclear plants in the next eight years.", 
+                                   "Keep current nuclear power plants but do not build any new plants.")))%>%
+  mutate(CO2Price = X3)%>%
+  mutate(ban.fuel = ifelse(X4 ==1 & X5 == 0, "Tighter fracking regulation on public lands that increases storage safety standards and transparency of what chemicals are used.",
+                           ifelse(X4 ==0 & X5 == 1, "Fully ban fossil fuel exploration on public lands.",
+                                  "Unregulated access to federal lands and waters for fossil fuel exploration.")))%>%
+  mutate(RFS = ifelse(X6 == 1 & X7 ==0, "Starting from 2021, reach 100% clean energy by 2050 with a yearly increase of 3.5% of clean energy in the grid.",
+                      ifelse(X6 == 0 & X7 == 1, "Starting from 2021, reach 100% clean energy by 2035 with a yearly increase of 7.5% of clean energy in the grid.",
+                             "Starting from 2021, reach 100% clean energy by 2100 with a yearly increase of 1.3% of clean energy in the grid.")))%>%
+  dplyr::select(-X1, -X2, -X3, -X4, -X5, -X6, -X7)
+
+names(indi.policy) <-  c("nuc.power11", "nuc.power12", "CO2Price1", "ban.fuel.explore11", "ban.fuel.explore12", "RFS11", "RFS12")
+
+#Keeping track how individuals changed their preferences
+
+group.recommendations_rep <- splitstackshape::expandRows(group.recommendations_mutated_1, count = 4, count.is.col = FALSE)%>%
+  dplyr::select(nuc.power01, nuc.power02, CO2Price0, ban.fuel.explore01, ban.fuel.explore02, RFS01, RFS02)
+
+policy.regret <- cbind(group.recommendations_rep, indi.policy)%>%
+  mutate(nuc.power_d1 = nuc.power01 - nuc.power11)%>%
+  mutate(nuc.power_d2 = nuc.power02 - nuc.power12)%>%
+  mutate(CO2Price_d = CO2Price0 - CO2Price1)%>%
+  mutate(ban.fuel.explore_d1 = ban.fuel.explore01 - ban.fuel.explore11)%>%
+  mutate(ban.fuel.explore_d2 = ban.fuel.explore02 - ban.fuel.explore12)%>%
+  mutate(RFS_d1 = RFS01 - RFS11)%>%
+  mutate(RFS_d2 = RFS02 - RFS12)
+
+policy.regret.indi <- cbind(policy.regret, coefs.all)%>%
+  mutate(nuc.diff1 = nuc.power_d1*nuc.power1)%>%
+  mutate(nuc.diff2 = nuc.power_d2 *nuc.power2)%>%
+  mutate(CO2Price.diff = CO2Price_d *CO2Price)%>%
+  mutate(ban.fuel.diff1 = ban.fuel.explore_d1*ban.fuel1)%>%
+  mutate(ban.fuel.diff2 =  ban.fuel.explore_d2*ban.fuel2)%>%
+  mutate(RFS.diff1 = RFS_d1 *RFS1)%>%
+  mutate(RFS.diff2 = RFS_d2*RFS2)%>%
+  mutate(nuc1.diff= ifelse(nuc.power_d1 == 1 & nuc.power_d2 == -1, nuc.diff1+nuc.diff2, ifelse(nuc.power_d1 == 1 &nuc.power_d2 == 0, nuc.power_d1*nuc.power1, 0)))%>%
+  mutate(nuc2.diff = ifelse(nuc.power_d2 == 1 & nuc.power_d1 == -1, nuc.diff2+nuc.diff1, ifelse(nuc.power_d2 == 1 &nuc.power_d1 == 0, nuc.diff2, 0)))%>%
+  mutate(ban1.diff = ifelse(ban.fuel.explore_d1 == 1 & ban.fuel.explore_d2 == -1, ban.fuel.diff1+ban.fuel.diff2, ifelse(ban.fuel.explore_d1 == 1 & ban.fuel.explore_d2 ==0, ban.fuel.diff1, 0)))%>%
+  mutate(ban2.diff = ifelse(ban.fuel.explore_d2 == 1 & ban.fuel.explore_d1 == -1, ban.fuel.diff2+ban.fuel.diff1, ifelse(ban.fuel.explore_d2 == 1 & ban.fuel.explore_d1 ==0, ban.fuel.diff2, 0)))%>%
+  mutate(RFS1.diff = ifelse(RFS_d1 == 1 & RFS_d2 == -1, RFS.diff1 + RFS.diff2, ifelse(RFS_d1 ==1 & RFS_d2 ==0, RFS.diff1, 0)))%>%
+  mutate(RFS2.diff = ifelse(RFS_d2 == 1 & RFS_d1 == -1, RFS.diff2 + RFS.diff1, ifelse(RFS_d2 ==1 & RFS_d1 ==0, RFS.diff2, 0)))%>%
+  mutate(nuc.move = ifelse(nuc.power_d1 != 0 | nuc.power_d2 != 0, 1,0))%>%
+  mutate(CO2Price.move = ifelse(CO2Price.diff != 0, 1, 0))%>%
+  mutate(ban.fuel.move = ifelse(ban.fuel.diff1 !=0 | ban.fuel.diff2 !=0, 1, 0))%>%
+  mutate(RFS.move = ifelse(RFS.diff1 != 0| RFS.diff2 != 0, 1, 0))
+
+policy.regret_plot <- policy.regret.indi%>%
+  dplyr::select(nuc.diff1, nuc.diff2, nuc.power_d1, nuc.power_d2, CO2Price.diff, CO2Price_d, ban.fuel.diff1, ban.fuel.diff2, ban.fuel.explore_d1, ban.fuel.explore_d2,
+                RFS.diff1, RFS.diff2, RFS_d1, RFS_d2, nuc1.diff, nuc2.diff, ban1.diff, ban2.diff, RFS1.diff, RFS2.diff, nuc.move, CO2Price.move, ban.fuel.move, RFS.move)
+
+policy.regret_plot_1 <- cbind(policy.regret_plot, treat.vector.total, clustered.indi$assigned, group.consensus.indi, indi.group)
+
+names(policy.regret_plot_1) <- c("Increase Nuclear Power", "Decrease Nuclear Power", "Move to Increase Nuclear Power", "Move to Decrease Nuclear Power", 
+                                 "CO2", "Move in CO2 Price", 
+                                 "Tighter Regulations Fuel Exploration", "Ban Fracking on Public Lands", 
+                                 "Move to Tighter Fracking Regs", "Move to Ban on FF Exploration on PL",
+                                 "2050 100% Clean Energy", "2035 100% Clean Energy", "Move to 2050 Goal", "Move to 2035 Goal",
+                                 "Nuc1Move", "Nuc2Move", "Ban1Move", "Ban2Move", "RFS1Move", "RFS2Move",
+                                 "Change in Nuclear Power", "Change in CO2 Price", "Change in FF Exploration", "Change in Clean Energy Goals", 
+                                 "Treatment", "Cluster_Assignment", 
+                                 "Group_Consensus", "Individual_Agreement")
+
+policy.regret_gathered <- gather(policy.regret_plot_1, key = "Key", value = "Value", -Cluster_Assignment, -Treatment, -Group_Consensus, -Individual_Agreement)
+
+policy.regret_gathered_group_agree <- policy.regret_gathered%>%
+  filter(Group_Consensus == 1)
+
+policy.regret_gathered_indi_agree <- policy.regret_gathered%>%
+  filter(Individual_Agreement == 1)
+
+
+policy_spread1 <- as.data.frame(matrix(NA, ncol = 7, nrow = 4))
+
+policy_spread1[1,1] <- mean(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 1 & policy.regret_gathered$Key == "Increase Nuclear Power", "Value"])
+policy_spread1[1,2] <- mean(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 1 & policy.regret_gathered$Key == "Decrease Nuclear Power", "Value"])
+policy_spread1[1,3] <- mean(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 1 & policy.regret_gathered$Key == "CO2", "Value"])
+policy_spread1[1,4] <- mean(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 1 & policy.regret_gathered$Key == "Tighter Regulations Fuel Exploration", "Value"])
+policy_spread1[1,5] <- mean(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 1 & policy.regret_gathered$Key == "Ban Fracking on Public Lands", "Value"])
+policy_spread1[1,6] <- mean(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 1 & policy.regret_gathered$Key == "2050 100% Clean Energy", "Value"])
+policy_spread1[1,7] <- mean(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 1 & policy.regret_gathered$Key == "2035 100% Clean Energy", "Value"])
+
+
+policy_spread1[2,1] <- mean(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 2 & policy.regret_gathered$Key == "Increase Nuclear Power", "Value"])
+policy_spread1[2,2] <- mean(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 2 & policy.regret_gathered$Key == "Decrease Nuclear Power", "Value"])
+policy_spread1[2,3] <- mean(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 2 & policy.regret_gathered$Key == "CO2", "Value"])
+policy_spread1[2,4] <- mean(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 2 & policy.regret_gathered$Key == "Tighter Regulations Fuel Exploration", "Value"])
+policy_spread1[2,5] <- mean(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 2 & policy.regret_gathered$Key == "Ban Fracking on Public Lands", "Value"])
+policy_spread1[2,6] <- mean(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 2 & policy.regret_gathered$Key == "2050 100% Clean Energy", "Value"])
+policy_spread1[2,7] <- mean(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 2 & policy.regret_gathered$Key == "2035 100% Clean Energy", "Value"])
+
+policy_spread1[3,1] <- mean(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 3 & policy.regret_gathered$Key == "Increase Nuclear Power", "Value"])
+policy_spread1[3,2] <- mean(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 3 & policy.regret_gathered$Key == "Decrease Nuclear Power", "Value"])
+policy_spread1[3,3] <- mean(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 3 & policy.regret_gathered$Key == "CO2", "Value"])
+policy_spread1[3,4] <- mean(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 3 & policy.regret_gathered$Key == "Tighter Regulations Fuel Exploration", "Value"])
+policy_spread1[3,5] <- mean(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 3 & policy.regret_gathered$Key == "Ban Fracking on Public Lands", "Value"])
+policy_spread1[3,6] <- mean(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 3 & policy.regret_gathered$Key == "2050 100% Clean Energy", "Value"])
+policy_spread1[3,7] <- mean(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 3 & policy.regret_gathered$Key == "2035 100% Clean Energy", "Value"])
+
+policy_spread1[4,1] <- mean(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 4 & policy.regret_gathered$Key == "Increase Nuclear Power", "Value"])
+policy_spread1[4,2] <- mean(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 4 & policy.regret_gathered$Key == "Decrease Nuclear Power", "Value"])
+policy_spread1[4,3] <- mean(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 4 & policy.regret_gathered$Key == "CO2", "Value"])
+policy_spread1[4,4] <- mean(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 4 & policy.regret_gathered$Key == "Tighter Regulations Fuel Exploration", "Value"])
+policy_spread1[4,5] <- mean(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 4 & policy.regret_gathered$Key == "Ban Fracking on Public Lands", "Value"])
+policy_spread1[4,6] <- mean(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 4 & policy.regret_gathered$Key == "2050 100% Clean Energy", "Value"])
+policy_spread1[4,7] <- mean(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 4 & policy.regret_gathered$Key == "2035 100% Clean Energy", "Value"])
+
+names(policy_spread1) <- c("Nuc1", "Nuc2", "CO2", "BanFuel1", "BanFuel2", "RFS1", "RFS2")
+
+policy_spread_segment <- policy_spread1
+
+policy_spread_segment$clustername <- c("1", "2", "3", "4")
+
+policy_spread_gathered <- gather(policy_spread_segment, key = "Key", value = "Value", -clustername)
+
+policy_spread_gathered$Key <- factor(policy_spread_gathered$Key, levels = c("Nuc1", "Nuc2", "CO2", "BanFuel1", "BanFuel2", "RFS1", "RFS2"))
+
+#Keeping track of how participants moved their preferences during discussion
+
+policy_movers <- as.data.frame(matrix(NA, ncol = 4, nrow = 4))
+
+policy_movers[1,1] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment ==1 & policy.regret_gathered$Key == "Change in Nuclear Power", "Value"])
+policy_movers[1,2] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment ==1 & policy.regret_gathered$Key == "Change in CO2 Price", "Value"])
+policy_movers[1,3] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment ==1 & policy.regret_gathered$Key == "Change in FF Exploration", "Value"])
+policy_movers[1,4] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment ==1 & policy.regret_gathered$Key == "Change in Clean Energy Goals", "Value"])
+
+policy_movers[2,1] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment ==2 & policy.regret_gathered$Key == "Change in Nuclear Power", "Value"])
+policy_movers[2,2] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment ==2 & policy.regret_gathered$Key == "Change in CO2 Price", "Value"])
+policy_movers[2,3] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment ==2 & policy.regret_gathered$Key == "Change in FF Exploration", "Value"])
+policy_movers[2,4] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment ==2 & policy.regret_gathered$Key == "Change in Clean Energy Goals", "Value"])
+
+policy_movers[3,1] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment ==3 & policy.regret_gathered$Key == "Change in Nuclear Power", "Value"])
+policy_movers[3,2] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment ==3 & policy.regret_gathered$Key == "Change in CO2 Price", "Value"])
+policy_movers[3,3] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment ==3 & policy.regret_gathered$Key == "Change in FF Exploration", "Value"])
+policy_movers[3,4] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment ==3 & policy.regret_gathered$Key == "Change in Clean Energy Goals", "Value"])
+
+policy_movers[4,1] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment ==4 & policy.regret_gathered$Key == "Change in Nuclear Power", "Value"])
+policy_movers[4,2] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment ==4 & policy.regret_gathered$Key == "Change in CO2 Price", "Value"])
+policy_movers[4,3] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment ==4 & policy.regret_gathered$Key == "Change in FF Exploration", "Value"])
+policy_movers[4,4] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment ==4 & policy.regret_gathered$Key == "Change in Clean Energy Goals", "Value"])
+
+names(policy_movers) <- c("Change in Nuclear Power", "Change in CO2 Price", "Change in FF Exploration", "Change in Clean Energy Goals")
+
+policy_movers$clustername <- c("1", "2", "3", "4")
+
+policy_movers_gathered <- gather(policy_movers, key = "Key", value = "Value", -clustername)
+
+#Keeping track of who moved towards a policy versus someone who moved away from a policy
+
+policy.regret_gathered_narrow <- gather(policy.regret_plot_1, key = "Key", value = "Value",  -Cluster_Assignment, -Treatment, -Group_Consensus, -Individual_Agreement,
+                                        -`Move to Increase Nuclear Power`, -`Move to Decrease Nuclear Power`, -`Move in CO2 Price`,
+                                        -`Move to Tighter Fracking Regs`, -`Move to Ban on FF Exploration on PL`, -`Move to 2050 Goal`, -`Move to 2035 Goal`)
+
+policy.regret_narrow_gathered <- as.data.frame(matrix(NA, ncol = 14, nrow = 4))
+
+policy.regret_narrow_gathered[1,1] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 1 & 
+                                                                           policy.regret_gathered_narrow$Key == "Increase Nuclear Power" & 
+                                                                           policy.regret_gathered_narrow$`Move to Increase Nuclear Power` > 0, "Value"])
+
+policy.regret_narrow_gathered[1,2] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 1 & 
+                                                                           policy.regret_gathered_narrow$Key == "Increase Nuclear Power" & 
+                                                                           policy.regret_gathered_narrow$`Move to Increase Nuclear Power` < 0, "Value"])
+
+policy.regret_narrow_gathered[1,3] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 1 & 
+                                                                           policy.regret_gathered_narrow$Key == "Decrease Nuclear Power" & 
+                                                                           policy.regret_gathered_narrow$`Move to Decrease Nuclear Power` > 0, "Value"])
+
+policy.regret_narrow_gathered[1,4] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 1 & 
+                                                                           policy.regret_gathered_narrow$Key == "Decrease Nuclear Power" & 
+                                                                           policy.regret_gathered_narrow$`Move to Decrease Nuclear Power` < 0, "Value"])
+
+policy.regret_narrow_gathered[1,5] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 1 & 
+                                                                           policy.regret_gathered_narrow$Key == "CO2" & 
+                                                                           policy.regret_gathered_narrow$`Move in CO2 Price` > 0, "Value"])
+
+policy.regret_narrow_gathered[1,6] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 1 & 
+                                                                           policy.regret_gathered_narrow$Key == "CO2" & 
+                                                                           policy.regret_gathered_narrow$`Move in CO2 Price` < 0, "Value"])
+
+policy.regret_narrow_gathered[1,7] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 1 & 
+                                                                           policy.regret_gathered_narrow$Key == "Tighter Regulations Fuel Exploration" & 
+                                                                           policy.regret_gathered_narrow$`Move to Tighter Fracking Regs` > 0, "Value"])
+
+policy.regret_narrow_gathered[1,8] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 1 & 
+                                                                           policy.regret_gathered_narrow$Key == "Tighter Regulations Fuel Exploration" & 
+                                                                           policy.regret_gathered_narrow$`Move to Tighter Fracking Regs` < 0, "Value"])
+
+policy.regret_narrow_gathered[1,9] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 1 & 
+                                                                           policy.regret_gathered_narrow$Key == "Ban Fracking on Public Lands" & 
+                                                                           policy.regret_gathered_narrow$`Move to Ban on FF Exploration on PL` > 0, "Value"])
+
+policy.regret_narrow_gathered[1,10] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 1 & 
+                                                                            policy.regret_gathered_narrow$Key == "Ban Fracking on Public Lands" & 
+                                                                            policy.regret_gathered_narrow$`Move to Ban on FF Exploration on PL` < 0, "Value"])
+
+policy.regret_narrow_gathered[1,11] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 1 & 
+                                                                            policy.regret_gathered_narrow$Key == "2050 100% Clean Energy" & 
+                                                                            policy.regret_gathered_narrow$`Move to 2050 Goal` > 0, "Value"])
+
+policy.regret_narrow_gathered[1,12] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 1 & 
+                                                                            policy.regret_gathered_narrow$Key == "2050 100% Clean Energy" & 
+                                                                            policy.regret_gathered_narrow$`Move to 2050 Goal` < 0, "Value"])
+
+policy.regret_narrow_gathered[1,13] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 1 & 
+                                                                            policy.regret_gathered_narrow$Key == "2035 100% Clean Energy" & 
+                                                                            policy.regret_gathered_narrow$`Move to 2035 Goal` > 0, "Value"])
+
+policy.regret_narrow_gathered[1,14] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 1 & 
+                                                                            policy.regret_gathered_narrow$Key == "2035 100% Clean Energy" & 
+                                                                            policy.regret_gathered_narrow$`Move to 2035 Goal` < 0, "Value"])
+
+policy.regret_narrow_gathered[2,1] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 2 & 
+                                                                           policy.regret_gathered_narrow$Key == "Increase Nuclear Power" & 
+                                                                           policy.regret_gathered_narrow$`Move to Increase Nuclear Power` > 0, "Value"])
+
+policy.regret_narrow_gathered[2,2] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 2 & 
+                                                                           policy.regret_gathered_narrow$Key == "Increase Nuclear Power" & 
+                                                                           policy.regret_gathered_narrow$`Move to Increase Nuclear Power` < 0, "Value"])
+
+policy.regret_narrow_gathered[2,3] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 2 & 
+                                                                           policy.regret_gathered_narrow$Key == "Decrease Nuclear Power" & 
+                                                                           policy.regret_gathered_narrow$`Move to Decrease Nuclear Power` > 0, "Value"])
+
+policy.regret_narrow_gathered[2,4] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 2 & 
+                                                                           policy.regret_gathered_narrow$Key == "Decrease Nuclear Power" & 
+                                                                           policy.regret_gathered_narrow$`Move to Decrease Nuclear Power` < 0, "Value"])
+
+policy.regret_narrow_gathered[2,5] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 2 & 
+                                                                           policy.regret_gathered_narrow$Key == "CO2" & 
+                                                                           policy.regret_gathered_narrow$`Move in CO2 Price` > 0, "Value"])
+
+policy.regret_narrow_gathered[2,6] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 2 & 
+                                                                           policy.regret_gathered_narrow$Key == "CO2" & 
+                                                                           policy.regret_gathered_narrow$`Move in CO2 Price` < 0, "Value"])
+
+policy.regret_narrow_gathered[2,7] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 2 & 
+                                                                           policy.regret_gathered_narrow$Key == "Tighter Regulations Fuel Exploration" & 
+                                                                           policy.regret_gathered_narrow$`Move to Tighter Fracking Regs` > 0, "Value"])
+
+policy.regret_narrow_gathered[2,8] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 2 & 
+                                                                           policy.regret_gathered_narrow$Key == "Tighter Regulations Fuel Exploration" & 
+                                                                           policy.regret_gathered_narrow$`Move to Tighter Fracking Regs` < 0, "Value"])
+
+policy.regret_narrow_gathered[2,9] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 2 & 
+                                                                           policy.regret_gathered_narrow$Key == "Ban Fracking on Public Lands" & 
+                                                                           policy.regret_gathered_narrow$`Move to Ban on FF Exploration on PL` > 0, "Value"])
+
+policy.regret_narrow_gathered[2,10] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 2 & 
+                                                                            policy.regret_gathered_narrow$Key == "Ban Fracking on Public Lands" & 
+                                                                            policy.regret_gathered_narrow$`Move to Ban on FF Exploration on PL` < 0, "Value"])
+
+policy.regret_narrow_gathered[2,11] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 2 & 
+                                                                            policy.regret_gathered_narrow$Key == "2050 100% Clean Energy" & 
+                                                                            policy.regret_gathered_narrow$`Move to 2050 Goal` > 0, "Value"])
+
+policy.regret_narrow_gathered[2,12] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 2 & 
+                                                                            policy.regret_gathered_narrow$Key == "2050 100% Clean Energy" & 
+                                                                            policy.regret_gathered_narrow$`Move to 2050 Goal` < 0, "Value"])
+
+policy.regret_narrow_gathered[2,13] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 2 & 
+                                                                            policy.regret_gathered_narrow$Key == "2035 100% Clean Energy" & 
+                                                                            policy.regret_gathered_narrow$`Move to 2035 Goal` > 0, "Value"])
+
+policy.regret_narrow_gathered[2,14] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 2 & 
+                                                                            policy.regret_gathered_narrow$Key == "2035 100% Clean Energy" & 
+                                                                            policy.regret_gathered_narrow$`Move to 2035 Goal` < 0, "Value"])
+
+policy.regret_narrow_gathered[3,1] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 3 & 
+                                                                           policy.regret_gathered_narrow$Key == "Increase Nuclear Power" & 
+                                                                           policy.regret_gathered_narrow$`Move to Increase Nuclear Power` > 0, "Value"])
+
+policy.regret_narrow_gathered[3,2] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 3 & 
+                                                                           policy.regret_gathered_narrow$Key == "Increase Nuclear Power" & 
+                                                                           policy.regret_gathered_narrow$`Move to Increase Nuclear Power` < 0, "Value"])
+
+policy.regret_narrow_gathered[3,3] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 3 & 
+                                                                           policy.regret_gathered_narrow$Key == "Decrease Nuclear Power" & 
+                                                                           policy.regret_gathered_narrow$`Move to Decrease Nuclear Power` > 0, "Value"])
+
+policy.regret_narrow_gathered[3,4] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 3 & 
+                                                                           policy.regret_gathered_narrow$Key == "Decrease Nuclear Power" & 
+                                                                           policy.regret_gathered_narrow$`Move to Decrease Nuclear Power` < 0, "Value"])
+
+policy.regret_narrow_gathered[3,5] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 3 & 
+                                                                           policy.regret_gathered_narrow$Key == "CO2" & 
+                                                                           policy.regret_gathered_narrow$`Move in CO2 Price` > 0, "Value"])
+
+policy.regret_narrow_gathered[3,6] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 3 & 
+                                                                           policy.regret_gathered_narrow$Key == "CO2" & 
+                                                                           policy.regret_gathered_narrow$`Move in CO2 Price` < 0, "Value"])
+
+policy.regret_narrow_gathered[3,7] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 3 & 
+                                                                           policy.regret_gathered_narrow$Key == "Tighter Regulations Fuel Exploration" & 
+                                                                           policy.regret_gathered_narrow$`Move to Tighter Fracking Regs` > 0, "Value"])
+
+policy.regret_narrow_gathered[3,8] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 3 & 
+                                                                           policy.regret_gathered_narrow$Key == "Tighter Regulations Fuel Exploration" & 
+                                                                           policy.regret_gathered_narrow$`Move to Tighter Fracking Regs` < 0, "Value"])
+
+policy.regret_narrow_gathered[3,9] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 3 & 
+                                                                           policy.regret_gathered_narrow$Key == "Ban Fracking on Public Lands" & 
+                                                                           policy.regret_gathered_narrow$`Move to Ban on FF Exploration on PL` > 0, "Value"])
+
+policy.regret_narrow_gathered[3,10] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 3 & 
+                                                                            policy.regret_gathered_narrow$Key == "Ban Fracking on Public Lands" & 
+                                                                            policy.regret_gathered_narrow$`Move to Ban on FF Exploration on PL` < 0, "Value"])
+
+policy.regret_narrow_gathered[3,11] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 3 & 
+                                                                            policy.regret_gathered_narrow$Key == "2050 100% Clean Energy" & 
+                                                                            policy.regret_gathered_narrow$`Move to 2050 Goal` > 0, "Value"])
+
+policy.regret_narrow_gathered[3,12] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 3 & 
+                                                                            policy.regret_gathered_narrow$Key == "2050 100% Clean Energy" & 
+                                                                            policy.regret_gathered_narrow$`Move to 2050 Goal` < 0, "Value"])
+
+policy.regret_narrow_gathered[3,13] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 3 & 
+                                                                            policy.regret_gathered_narrow$Key == "2035 100% Clean Energy" & 
+                                                                            policy.regret_gathered_narrow$`Move to 2035 Goal` > 0, "Value"])
+
+policy.regret_narrow_gathered[3,14] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 3 & 
+                                                                            policy.regret_gathered_narrow$Key == "2035 100% Clean Energy" & 
+                                                                            policy.regret_gathered_narrow$`Move to 2035 Goal` < 0, "Value"])
+
+policy.regret_narrow_gathered[4,1] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 4 & 
+                                                                           policy.regret_gathered_narrow$Key == "Increase Nuclear Power" & 
+                                                                           policy.regret_gathered_narrow$`Move to Increase Nuclear Power` > 0, "Value"])
+
+policy.regret_narrow_gathered[4,2] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 4 & 
+                                                                           policy.regret_gathered_narrow$Key == "Increase Nuclear Power" & 
+                                                                           policy.regret_gathered_narrow$`Move to Increase Nuclear Power` < 0, "Value"])
+
+policy.regret_narrow_gathered[4,3] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 4 & 
+                                                                           policy.regret_gathered_narrow$Key == "Decrease Nuclear Power" & 
+                                                                           policy.regret_gathered_narrow$`Move to Decrease Nuclear Power` > 0, "Value"])
+
+policy.regret_narrow_gathered[4,4] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 4 & 
+                                                                           policy.regret_gathered_narrow$Key == "Decrease Nuclear Power" & 
+                                                                           policy.regret_gathered_narrow$`Move to Decrease Nuclear Power` < 0, "Value"])
+
+policy.regret_narrow_gathered[4,5] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 4 & 
+                                                                           policy.regret_gathered_narrow$Key == "CO2" & 
+                                                                           policy.regret_gathered_narrow$`Move in CO2 Price` > 0, "Value"])
+
+policy.regret_narrow_gathered[4,6] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 4 & 
+                                                                           policy.regret_gathered_narrow$Key == "CO2" & 
+                                                                           policy.regret_gathered_narrow$`Move in CO2 Price` < 0, "Value"])
+
+policy.regret_narrow_gathered[4,7] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 4 & 
+                                                                           policy.regret_gathered_narrow$Key == "Tighter Regulations Fuel Exploration" & 
+                                                                           policy.regret_gathered_narrow$`Move to Tighter Fracking Regs` > 0, "Value"])
+
+policy.regret_narrow_gathered[4,8] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 4 & 
+                                                                           policy.regret_gathered_narrow$Key == "Tighter Regulations Fuel Exploration" & 
+                                                                           policy.regret_gathered_narrow$`Move to Tighter Fracking Regs` < 0, "Value"])
+
+policy.regret_narrow_gathered[4,9] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 4 & 
+                                                                           policy.regret_gathered_narrow$Key == "Ban Fracking on Public Lands" & 
+                                                                           policy.regret_gathered_narrow$`Move to Ban on FF Exploration on PL` > 0, "Value"])
+
+policy.regret_narrow_gathered[4,10] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 4 & 
+                                                                            policy.regret_gathered_narrow$Key == "Ban Fracking on Public Lands" & 
+                                                                            policy.regret_gathered_narrow$`Move to Ban on FF Exploration on PL` < 0, "Value"])
+
+policy.regret_narrow_gathered[4,11] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 4 & 
+                                                                            policy.regret_gathered_narrow$Key == "2050 100% Clean Energy" & 
+                                                                            policy.regret_gathered_narrow$`Move to 2050 Goal` > 0, "Value"])
+
+policy.regret_narrow_gathered[4,12] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 4 & 
+                                                                            policy.regret_gathered_narrow$Key == "2050 100% Clean Energy" & 
+                                                                            policy.regret_gathered_narrow$`Move to 2050 Goal` < 0, "Value"])
+
+policy.regret_narrow_gathered[4,13] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 4 & 
+                                                                            policy.regret_gathered_narrow$Key == "2035 100% Clean Energy" & 
+                                                                            policy.regret_gathered_narrow$`Move to 2035 Goal` > 0, "Value"])
+
+policy.regret_narrow_gathered[4,14] <- mean(policy.regret_gathered_narrow[policy.regret_gathered_narrow$Cluster_Assignment == 4 & 
+                                                                            policy.regret_gathered_narrow$Key == "2035 100% Clean Energy" & 
+                                                                            policy.regret_gathered_narrow$`Move to 2035 Goal` < 0, "Value"])
+
+names(policy.regret_narrow_gathered) <- c("ToNuc1", "AwayNuc1", "ToNuc2", "AwayNuc2", "ToCO2", "AwayCO2", "ToBanFuel1", "AwayBanFuel1", "ToBanFuel2", "AwayBanFuel2", "ToRFS1", "AwayRFS1", "ToRFS2", "AwayRFS2")
+
+policy.regret_narrow_gathered_segment <- policy.regret_narrow_gathered
+
+policy.regret_narrow_gathered_segment$clustername <- c("1", "2", "3", "4")
+
+policy.regret_narrow_gathered_segment_gathered <- gather(policy.regret_narrow_gathered_segment, key = "Key", value = "Value", -clustername)
+
+policy.regret_narrow_gathered_segment_gathered$Key <- factor(policy.regret_narrow_gathered_segment_gathered$Key, levels = c("ToNuc1", "AwayNuc1", "ToNuc2", "AwayNuc2", "ToCO2", "AwayCO2", "ToBanFuel1", "AwayBanFuel1", "ToBanFuel2", "AwayBanFuel2", "ToRFS1", "AwayRFS1", "ToRFS2", "AwayRFS2"))
+
+policy.regret_narrow_gathered_segment_gathered <- policy.regret_narrow_gathered_segment_gathered%>%
+  mutate(f4str = substr(Key, 1, 4))%>%
+  mutate(c_ctrl = ifelse(f4str == "Away", 0, 1))
+
+policy_move_narrow <- as.data.frame(matrix(NA, ncol = 14, nrow = 4))
+
+policy_move_narrow[1,1] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 1 & policy.regret_gathered$Key == "Move to Increase Nuclear Power" & policy.regret_gathered$Value >0, "Value"])
+policy_move_narrow[1,2] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 1 & policy.regret_gathered$Key == "Move to Increase Nuclear Power" & policy.regret_gathered$Value <0, "Value"])
+policy_move_narrow[1,3] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 1 & policy.regret_gathered$Key == "Move to Decrease Nuclear Power" & policy.regret_gathered$Value >0, "Value"])
+policy_move_narrow[1,4] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 1 & policy.regret_gathered$Key == "Move to Decrease Nuclear Power" & policy.regret_gathered$Value <0, "Value"])
+policy_move_narrow[1,5] <- nrow(subset(policy.regret_gathered, Cluster_Assignment == 1 & Key == "Move in CO2 Price" & Value > 0))
+policy_move_narrow[1,6] <- nrow(subset(policy.regret_gathered, Cluster_Assignment == 1 & Key == "Move in CO2 Price" & Value < 0))*-1
+policy_move_narrow[1,7] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 1 & policy.regret_gathered$Key == "Move to Tighter Fracking Regs" & policy.regret_gathered$Value >0, "Value"])
+policy_move_narrow[1,8] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 1 & policy.regret_gathered$Key == "Move to Tighter Fracking Regs" & policy.regret_gathered$Value <0, "Value"])
+policy_move_narrow[1,9] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 1 & policy.regret_gathered$Key == "Move to Ban on FF Exploration on PL" & policy.regret_gathered$Value >0, "Value"])
+policy_move_narrow[1,10] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 1 & policy.regret_gathered$Key == "Move to Ban on FF Exploration on PL" & policy.regret_gathered$Value <0, "Value"])
+policy_move_narrow[1,11] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 1 & policy.regret_gathered$Key == "Move to 2050 Goal" & policy.regret_gathered$Value >0, "Value"])
+policy_move_narrow[1,12] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 1 & policy.regret_gathered$Key == "Move to 2050 Goal" & policy.regret_gathered$Value <0, "Value"])
+policy_move_narrow[1,13] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 1 & policy.regret_gathered$Key == "Move to 2035 Goal" & policy.regret_gathered$Value >0, "Value"])
+policy_move_narrow[1,14] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 1 & policy.regret_gathered$Key == "Move to 2035 Goal" & policy.regret_gathered$Value <0, "Value"])
+
+policy_move_narrow[2,1] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 2 & policy.regret_gathered$Key == "Move to Increase Nuclear Power" & policy.regret_gathered$Value >0, "Value"])
+policy_move_narrow[2,2] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 2 & policy.regret_gathered$Key == "Move to Increase Nuclear Power" & policy.regret_gathered$Value <0, "Value"])
+policy_move_narrow[2,3] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 2 & policy.regret_gathered$Key == "Move to Decrease Nuclear Power" & policy.regret_gathered$Value >0, "Value"])
+policy_move_narrow[2,4] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 2 & policy.regret_gathered$Key == "Move to Decrease Nuclear Power" & policy.regret_gathered$Value <0, "Value"])
+policy_move_narrow[2,5] <- nrow(subset(policy.regret_gathered, Cluster_Assignment == 2 & Key == "Move in CO2 Price" & Value > 0))
+policy_move_narrow[2,6] <- nrow(subset(policy.regret_gathered, Cluster_Assignment == 2 & Key == "Move in CO2 Price" & Value < 0))*-1
+policy_move_narrow[2,7] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 2 & policy.regret_gathered$Key == "Move to Tighter Fracking Regs" & policy.regret_gathered$Value >0, "Value"])
+policy_move_narrow[2,8] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 2 & policy.regret_gathered$Key == "Move to Tighter Fracking Regs" & policy.regret_gathered$Value <0, "Value"])
+policy_move_narrow[2,9] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 2 & policy.regret_gathered$Key == "Move to Ban on FF Exploration on PL" & policy.regret_gathered$Value >0, "Value"])
+policy_move_narrow[2,10] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 2 & policy.regret_gathered$Key == "Move to Ban on FF Exploration on PL" & policy.regret_gathered$Value <0, "Value"])
+policy_move_narrow[2,11] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 2 & policy.regret_gathered$Key == "Move to 2050 Goal" & policy.regret_gathered$Value >0, "Value"])
+policy_move_narrow[2,12] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 2 & policy.regret_gathered$Key == "Move to 2050 Goal" & policy.regret_gathered$Value <0, "Value"])
+policy_move_narrow[2,13] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 2 & policy.regret_gathered$Key == "Move to 2035 Goal" & policy.regret_gathered$Value >0, "Value"])
+policy_move_narrow[2,14] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 2 & policy.regret_gathered$Key == "Move to 2035 Goal" & policy.regret_gathered$Value <0, "Value"])
+
+policy_move_narrow[3,1] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 3 & policy.regret_gathered$Key == "Move to Increase Nuclear Power" & policy.regret_gathered$Value >0, "Value"])
+policy_move_narrow[3,2] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 3 & policy.regret_gathered$Key == "Move to Increase Nuclear Power" & policy.regret_gathered$Value <0, "Value"])
+policy_move_narrow[3,3] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 3 & policy.regret_gathered$Key == "Move to Decrease Nuclear Power" & policy.regret_gathered$Value >0, "Value"])
+policy_move_narrow[3,4] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 3 & policy.regret_gathered$Key == "Move to Decrease Nuclear Power" & policy.regret_gathered$Value <0, "Value"])
+policy_move_narrow[3,5] <- nrow(subset(policy.regret_gathered, Cluster_Assignment == 3 & Key == "Move in CO2 Price" & Value > 0))
+policy_move_narrow[3,6] <- nrow(subset(policy.regret_gathered, Cluster_Assignment == 3 & Key == "Move in CO2 Price" & Value < 0))*-1
+policy_move_narrow[3,7] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 3 & policy.regret_gathered$Key == "Move to Tighter Fracking Regs" & policy.regret_gathered$Value >0, "Value"])
+policy_move_narrow[3,8] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 3 & policy.regret_gathered$Key == "Move to Tighter Fracking Regs" & policy.regret_gathered$Value <0, "Value"])
+policy_move_narrow[3,9] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 3 & policy.regret_gathered$Key == "Move to Ban on FF Exploration on PL" & policy.regret_gathered$Value >0, "Value"])
+policy_move_narrow[3,10] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 3 & policy.regret_gathered$Key == "Move to Ban on FF Exploration on PL" & policy.regret_gathered$Value <0, "Value"])
+policy_move_narrow[3,11] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 3 & policy.regret_gathered$Key == "Move to 2050 Goal" & policy.regret_gathered$Value >0, "Value"])
+policy_move_narrow[3,12] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 3 & policy.regret_gathered$Key == "Move to 2050 Goal" & policy.regret_gathered$Value <0, "Value"])
+policy_move_narrow[3,13] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 3 & policy.regret_gathered$Key == "Move to 2035 Goal" & policy.regret_gathered$Value >0, "Value"])
+policy_move_narrow[3,14] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 3 & policy.regret_gathered$Key == "Move to 2035 Goal" & policy.regret_gathered$Value <0, "Value"])
+
+policy_move_narrow[4,1] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 4 & policy.regret_gathered$Key == "Move to Increase Nuclear Power" & policy.regret_gathered$Value >0, "Value"])
+policy_move_narrow[4,2] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 4 & policy.regret_gathered$Key == "Move to Increase Nuclear Power" & policy.regret_gathered$Value <0, "Value"])
+policy_move_narrow[4,3] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 4 & policy.regret_gathered$Key == "Move to Decrease Nuclear Power" & policy.regret_gathered$Value >0, "Value"])
+policy_move_narrow[4,4] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 4 & policy.regret_gathered$Key == "Move to Decrease Nuclear Power" & policy.regret_gathered$Value <0, "Value"])
+policy_move_narrow[4,5] <- nrow(subset(policy.regret_gathered, Cluster_Assignment == 4 & Key == "Move in CO2 Price" & Value > 0))
+policy_move_narrow[4,6] <- nrow(subset(policy.regret_gathered, Cluster_Assignment == 4 & Key == "Move in CO2 Price" & Value < 0))*-1
+policy_move_narrow[4,7] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 4 & policy.regret_gathered$Key == "Move to Tighter Fracking Regs" & policy.regret_gathered$Value >0, "Value"])
+policy_move_narrow[4,8] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 4 & policy.regret_gathered$Key == "Move to Tighter Fracking Regs" & policy.regret_gathered$Value <0, "Value"])
+policy_move_narrow[4,9] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 4 & policy.regret_gathered$Key == "Move to Ban on FF Exploration on PL" & policy.regret_gathered$Value >0, "Value"])
+policy_move_narrow[4,10] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 4 & policy.regret_gathered$Key == "Move to Ban on FF Exploration on PL" & policy.regret_gathered$Value <0, "Value"])
+policy_move_narrow[4,11] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 4 & policy.regret_gathered$Key == "Move to 2050 Goal" & policy.regret_gathered$Value >0, "Value"])
+policy_move_narrow[4,12] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 4 & policy.regret_gathered$Key == "Move to 2050 Goal" & policy.regret_gathered$Value <0, "Value"])
+policy_move_narrow[4,13] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 4 & policy.regret_gathered$Key == "Move to 2035 Goal" & policy.regret_gathered$Value >0, "Value"])
+policy_move_narrow[4,14] <- sum(policy.regret_gathered[policy.regret_gathered$Cluster_Assignment == 4 & policy.regret_gathered$Key == "Move to 2035 Goal" & policy.regret_gathered$Value <0, "Value"])
+
+names(policy_move_narrow) <- c("ToNuc1", "AwayNuc1", "ToNuc2", "AwayNuc2", "ToCO2", "AwayCO2", "ToBanFuel1", "AwayBanFuel1", "ToBanFuel2", "AwayBanFuel2", "ToRFS1", "AwayRFS1", "ToRFS2", "AwayRFS2")
+
+policy_move_narrow_segment <- policy_move_narrow
+
+policy_move_narrow_segment$clustername <- c("1", "2", "3", "4")
+
+policy_move_narrow_gathered <- gather(policy_move_narrow_segment, key = "Key", value = "Value", -clustername)
+
+policy_move_narrow_gathered$Key <- factor(policy_move_narrow_gathered$Key, levels = c("ToNuc1", "AwayNuc1", "ToNuc2", "AwayNuc2", "ToCO2", "AwayCO2", "ToBanFuel1", "AwayBanFuel1", "ToBanFuel2", "AwayBanFuel2", "ToRFS1", "AwayRFS1", "ToRFS2", "AwayRFS2"))
+
+policy_move_narrow_gathered <- policy_move_narrow_gathered%>%
+  mutate(f4str = substr(Key, 1, 4))%>%
+  mutate(c_ctrl = ifelse(f4str == "Away", 0, 1))%>%
+  mutate(value_pct = abs(Value)/54)
+
+policy_move_single <- policy_move_narrow_gathered%>%
+  filter(c_ctrl == 1)
+
+policy_move_single_2 <- policy_move_narrow_gathered%>%
+  filter(c_ctrl == 0)
+
+policy_move_match <- cbind(policy_move_single, policy_move_single_2)
+
+names(policy_move_match) <- c("clustername_1", "Key_1", "Value_1", "f4str_1", "c_ctrl_1", "value_pct_1", "clustername_2", "Key_2", "value_2", "f4str_2", "c_ctrl_2", "value_pct_2")
+
+
+# Figure 2 in the manuscript
+# Helper function for panel labeling
+variable_names <- list(
+  "1" = "Indifferent",
+  "2" = "Fast Decarbonization",
+  "3" = "Against Fossil Fuel Exploration",
+  "4" = "Against Status Quo"
+)
+
+variable_labeller <- function(variable, value){
+  
+  return(variable_names[value])
+  
+}
+
+ggplot(data = policy_move_match)+
+  geom_segment(aes(x=Key_1, xend = Key_1, y = 0, yend = Value_1),  size =1, color = "blue", linetype = "dashed")+
+  geom_segment(aes(x=Key_1, xend = Key_1, y = 0, yend = value_2),  size =1, color = "red", linetype = "twodash")+
+  geom_point(aes(x=Key_1,y = value_2), color = "red", size =4, alpha = 0.6)+
+  geom_point(aes(x=Key_1,y = Value_1), color = "blue", size = 4, alpha = 0.6)+
+  geom_hline(yintercept = 0, size = 1)+
+  scale_x_discrete(labels = c("Increase Nuclear Power", "Decrease Nuclear Power",
+                              "$/ton CO2", "Tighter FF Regs",
+                              "Ban FF on PL", "2050 100% Clean Energy", 
+                              "2035 100% Clean Energy"))+
+  scale_y_continuous(breaks = c(-20, -10, 0, 10, 20), limits = c(-20, 25))+
+  facet_wrap(~clustername_1, labeller = variable_labeller)+
+  coord_flip()+
+  xlab("Policy Attribute")+
+  ylab("Number of Participants")+
+  theme_bw()+
+  theme(axis.text = element_text(size = 12),
+        axis.title = element_text(size = 14, face = "bold"),
+        axis.text.x = element_text(angle = 60, hjust = 1),
+        panel.border = element_rect(color = "black", fill = NA, size = 1),
+        legend.text = element_text(size = 14),
+        legend.title = element_text(size = 14, face = "bold"),
+        strip.text = element_text(size = 14))
+
+ggsave("Figures/figure2.png", width = 1500, height = 800, units = "px", dpi = 100)
+
+#Final Recommendation to groups
+group.recommendations <- data.frame(matrix(NA, nrow  = 54, ncol = 4))
+
+for(i in 1:54){
+  
+  group.recommendations[i,] <- read_excel(paste0("Data/Group Result/Final Recommendation", i, ".xlsx"))
+  
+}
+
+group.recommendations.bind <- cbind(group.recommendations, treat.vector, group.consensus)
+
+names(group.recommendations.bind) <- c("nuc.power", "CO2Price", "ban.fuel", "RFS", "Treat.Vec", "Consensus")
+
+group.recommendations.bind <- group.recommendations.bind%>%
+  mutate(nuc.power = ifelse(nuc.power == "Keep current nuclear power plants and provide money to increase nuclear power by 14% over the next eight years.", "Increase Nuc Power", ifelse(
+    nuc.power =="Shut down nuclear power plants that are not making money, reducing nuclear power by 14-29% than today. Do not build nuclear plants in the next eight years.", "Reduce Nuc Power", "Maintain Nuc Power"
+  )))%>%
+  mutate(ban.fuel = ifelse(ban.fuel == "Fully ban fossil fuel exploration on public lands.", "Ban FF on FL", ifelse(
+    ban.fuel == "Tighter fracking regulation on public lands that increases storage safety standards and transparency of what chemicals are used.", "Tighter Regulations", "No restrictions"
+  )))%>%
+  mutate(RFS = ifelse(RFS == "Starting from 2021, reach 100% clean energy by 2050 with a yearly increase of 3.5% of clean energy in the grid.", "2050 Goal", ifelse(
+    RFS == "Starting from 2021, reach 100% clean energy by 2035 with a yearly increase of 7.5% of clean energy in the grid.", "2035 Goal", "2100 Goal"
+  )))%>%
+  mutate(Treat.Vec = ifelse(Treat.Vec == 0, "Weighted Sum", "Mean Variance"))%>%
+  mutate(Consensus = ifelse(Consensus == 0, "No", "Yes"))
+
+group.recommendations.bind.gather <- gather(group.recommendations.bind, key = "Key", value = "Value", -c(Treat.Vec, Consensus))
+
+#Table 3 results tabulated from group.recommendations.bind_sum dataframe
+group.recommendations.bind_sum <- group.recommendations.bind%>%
+  group_by(Treat.Vec, Consensus)%>%
+  summarise('Increase Nuclear' = sum(nuc.power == "Increase Nuc Power"),
+            'Decrease Nuclear' = sum(nuc.power == "Reduce Nuc Power"),
+            'Maintain Nuclear' = sum(nuc.power == "Maintain Nuc Power"),
+            '$0/ton CO2' = sum(CO2Price == 0),
+            '$30/ton CO2' = sum(CO2Price == 30),
+            '$60/ton CO2' = sum(CO2Price ==60),
+            '$90/ton CO2' = sum(CO2Price == 90),
+            '$120/ton CO2' = sum(CO2Price == 120),
+            '$150/ton CO2' = sum(CO2Price == 150),
+            'Tighter Regulations' = sum(ban.fuel == "Tighter Regulations"),
+            'Ban FF on PL' = sum(ban.fuel == "Ban FF on FL"),
+            'No restrictions' = sum(ban.fuel == "No restrictions"),
+            '2035 Goal' = sum(RFS == "2035 Goal"),
+            '2050 Goal' = sum(RFS == "2050 Goal"),
+            '2100 Goal' = sum(RFS == "2100 Goal"))%>%
+  gather(key = "Level", value = "Sum", -Treat.Vec, -Consensus)%>%
+  mutate(Attribute = ifelse(Level == "Increase Nuclear" | Level == "Decrease Nuclear" | Level == "Maintain Nuclear", "Nuc Power",
+                            ifelse(Level == "$0/ton CO2" | Level == "$30/ton CO2" | Level == "$60/ton CO2" 
+                                   | Level == "$90/ton CO2" | Level == "$120/ton CO2" | Level == "$150/ton CO2", "CO2 Price",
+                                   ifelse(Level == "2035 Goal" | Level == "2050 Goal" | Level == "2100 Goal", "100% Clean Energy Goal", "FF on PL"))))
+
+
