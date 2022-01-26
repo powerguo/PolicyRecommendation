@@ -28,6 +28,7 @@ library(readxl)
 library(fmsb)
 library(gridExtra)
 library(ggpubr)
+library(DHARMa)
 
 
 #Read in participant voting results for those who participated in Stage 3
@@ -79,10 +80,21 @@ T2.indi.consensus <- indi.consensus%>%
   filter(treat.vector.total == 1)
 
 #Individual model for recommendation
-consensus <- lmer(V1 ~ as.factor(treat.vector.total) + (1|group.number), control=lmerControl(optimizer = "optimx",optCtrl=list(method= "L-BFGS-B")),  data = indi.consensus)
+consensus <- glmer(V1 ~ as.factor(treat.vector.total) + (1|group.number), family = binomial(), control=glmerControl(optimizer = "optimx",optCtrl=list(method= "L-BFGS-B")),  data = indi.consensus)
 
-#Fixed effect reported in Table 2
-fixef(consensus)
+simulationsConsensus <- simulateResiduals(fittedModel = consensus, plot =F)
+
+plot(simulationsConsensus)
+
+plotQQunif(simulationsConsensus)
+
+plotResiduals(simulationsConsensus)
+
+residuals(simulationsConsensus)
+
+plotResiduals(simulationsConsensus, indi.consensus$treat.vector.total, quantreg = T)
+
+testDispersion(simulationsConsensus)
 
 #Individual validation result
 indi.valid <- c()
@@ -133,8 +145,19 @@ treat.count <- rep(treat.vector, each = 40)
 total.validation <- as.data.frame(cbind(total.valid, person.count, group.count, treat.count))
 
 #Validation Model with random intercept for individual and group
-indi.validation <- lmer(data = total.validation, total.valid ~ as.factor(treat.count) + (1|group.count) + (1|person.count), 
-                        control=lmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
+indi.validation <- glmer(data = total.validation, total.valid ~ as.factor(treat.count) + (1|group.count) + (1|person.count), 
+                        family = binomial(),control=glmerControl(optimizer="bobyqa",optCtrl=list(maxfun=2e5)))
 
-#Fixed effect of model selection reported in Table 2
-fixef(indi.validation)
+simulationsValidation <- simulateResiduals(fittedModel = indi.validation, plot =F)
+
+plot(simulationsValidation)
+
+plotQQunif(simulationsConsensus)
+
+plotResiduals(simulationsConsensus)
+
+residuals(simulationsConsensus)
+
+plotResiduals(simulationsConsensus, indi.consensus$treat.vector.total, quantreg = T)
+
+testDispersion(simulationsConsensus)
